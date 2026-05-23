@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Physics Simulation — Mô phỏng vật lý 3D</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <header class="app-header">
+          <h1>Physics Sim</h1>
+          <p class="subtitle">Đồ án DHMT — UIT</p>
+        </header>
+        <div id="gui-root"></div>
+        <div id="playback-bar">
+          <button type="button" id="btn-play" class="btn primary">▶ Play</button>
+          <button type="button" id="btn-pause" class="btn">⏸ Pause</button>
+          <button type="button" id="btn-reset" class="btn">↺ Reset</button>
+          <button type="button" id="btn-reset-view" class="btn">⌂ Reset View</button>
+        </div>
+        <section id="data-panel" class="data-panel">
+          <h2>Dữ liệu vật lý</h2>
+          <pre id="data-content">Chọn scene và bấm Play...</pre>
+          <div class="data-actions">
+            <button type="button" id="btn-record" class="btn small">Ghi mốc</button>
+            <button type="button" id="btn-clear-records" class="btn small">Xóa mốc</button>
+            <button type="button" id="btn-export-csv" class="btn small">Export CSV</button>
+          </div>
+          <div id="records-table-wrap" class="records-wrap hidden">
+            <table id="records-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>t (s)</th>
+                  <th>Pos</th>
+                  <th>v (m/s)</th>
+                  <th>Ek (J)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <p id="drag-hint" class="hint">STOPPED/PAUSED: click trái để chọn vật, kéo trái để xoay camera.</p>
+      </aside>
+      <main id="viewport">
+        <canvas id="canvas"></canvas>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

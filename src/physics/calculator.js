@@ -1,0 +1,84 @@
+import { degToRad, vecLength } from '../utils/helpers.js';
+
+export function kineticEnergy(mass, vx, vy, vz = 0) {
+  const v2 = vx * vx + vy * vy + vz * vz;
+  return 0.5 * mass * v2;
+}
+
+export function inclineForces(mass, g, angleDeg, mu, appliedF = 0) {
+  const theta = degToRad(angleDeg);
+  const sinT = Math.sin(theta);
+  const cosT = Math.cos(theta);
+  const weight = mass * g;
+  const wParallel = weight * sinT;
+  const normal = weight * cosT;
+  const friction = mu * normal;
+  const net = appliedF + wParallel - friction;
+  return {
+    gravity: weight,
+    weightParallel: wParallel,
+    normal,
+    friction,
+    applied: appliedF,
+    net,
+    acceleration: mass > 0 ? net / mass : 0,
+  };
+}
+
+export function horizontalForces(mass, g, mu, appliedF, velX, velZ) {
+  const weight = mass * g;
+  const normal = weight;
+  const frictionMag = mu * normal;
+  const speed = vecLength(velX, 0, velZ);
+  let fx = appliedF;
+  let fz = 0;
+  if (speed > 0.01) {
+    fx -= (frictionMag * velX) / speed;
+    fz -= (frictionMag * velZ) / speed;
+  } else if (appliedF < frictionMag) {
+    fx = 0;
+  } else {
+    fx = appliedF - frictionMag;
+  }
+  const net = vecLength(fx, 0, fz);
+  return {
+    gravity: weight,
+    normal,
+    friction: frictionMag,
+    applied: appliedF,
+    net,
+    acceleration: mass > 0 ? net / mass : 0,
+    frictionComponents: { x: fx - appliedF, z: fz },
+  };
+}
+
+export function freeFallForces(mass, g, ax = 0) {
+  const weight = mass * g;
+  return {
+    gravity: weight,
+    applied: mass * ax,
+    net: mass * ax,
+    accelerationY: -g,
+    accelerationX: ax,
+  };
+}
+
+export function momentum1D(masses, velocities) {
+  return masses.reduce((p, m, i) => p + m * velocities[i], 0);
+}
+
+export function totalKineticEnergy(objects) {
+  return objects.reduce((sum, o) => {
+    const v = o.body?.velocity ?? o.velocity;
+    const m = o.mass ?? o.body?.mass;
+    return sum + kineticEnergy(m, v.x, v.y, v.z);
+  }, 0);
+}
+
+export function velocityFromBody(body) {
+  return { x: body.velocity.x, y: body.velocity.y, z: body.velocity.z };
+}
+
+export function positionFromBody(body) {
+  return { x: body.position.x, y: body.position.y, z: body.position.z };
+}

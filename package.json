@@ -1,0 +1,20 @@
+{
+  "name": "physics-simulator",
+  "version": "1.0.0",
+  "description": "Web app mô phỏng vật lý 3D cho giáo dục THCS",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "lil-gui": "^0.20.0",
+    "stats.js": "^0.17.0",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  }
+}

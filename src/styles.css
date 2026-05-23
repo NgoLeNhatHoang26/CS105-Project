@@ -1,0 +1,166 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+#app {
+  display: flex;
+}
+
+#sidebar {
+  width: 320px;
+  min-width: 280px;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  background: #16213e;
+  border-right: 1px solid #0f3460;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.app-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid #0f3460;
+}
+
+.app-header h1 {
+  font-size: 1.1rem;
+  color: #e94560;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+#gui-root {
+  padding: 0 8px;
+}
+
+#gui-root .lil-gui {
+  --width: 100%;
+  --name-width: 45%;
+  --background-color: #1a1a2e;
+  --widget-color: #0f3460;
+  --focus-color: #e94560;
+  --font-family: inherit;
+}
+
+#playback-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid #0f3460;
+}
+
+.btn {
+  padding: 6px 10px;
+  border: 1px solid #0f3460;
+  background: #1a1a2e;
+  color: #eee;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn:hover {
+  background: #0f3460;
+}
+
+.btn.primary {
+  background: #e94560;
+  border-color: #e94560;
+}
+
+.btn.small {
+  font-size: 0.72rem;
+  padding: 4px 8px;
+}
+
+.data-panel {
+  padding: 10px 12px;
+  border-top: 1px solid #0f3460;
+  flex: 1;
+  min-height: 120px;
+}
+
+.data-panel h2 {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  color: #94a3b8;
+}
+
+#data-content {
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  font-family: 'Consolas', monospace;
+  background: #0d1117;
+  padding: 8px;
+  border-radius: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.data-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.records-wrap {
+  margin-top: 8px;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.records-wrap.hidden {
+  display: none;
+}
+
+#records-table {
+  width: 100%;
+  font-size: 0.68rem;
+  border-collapse: collapse;
+}
+
+#records-table th,
+#records-table td {
+  border: 1px solid #0f3460;
+  padding: 3px 5px;
+  text-align: left;
+}
+
+.hint {
+  font-size: 0.68rem;
+  color: #64748b;
+  padding: 8px 12px 12px;
+}
+
+#viewport {
+  flex: 1;
+  position: relative;
+  background: #0d1117;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
