@@ -75,9 +75,17 @@ export const DEFAULT_SCENE_PARAMS = {
     mass2: 3,
     angleDeg: 30,
     length: 5,
+    collisionMode: 'head_on',
     restitution: 0.6,
+    object1InitVelocity: 5,
     object2InitVelocity: 5,
-    friction: 0.1,
+    object1Direction: 1,
+    object2Direction: -1,
+    initialDistance: 6,
+    sphereRadius: 0.45,
+    friction: 0,
+    pauseOnCollision: false,
+    gravityEnabled: false,
   },
 };
 

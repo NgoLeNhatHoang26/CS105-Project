@@ -95,3 +95,33 @@ export function applyInclineFriction(body, inclineData, mass, g, mu, appliedForc
 
   applyForceVector(body, { x: fx, y: fy, z: fz });
 }
+
+/**
+ * Ma sát Coulomb (μN) trên mặt phẳng ngang (mặt xz).
+ * appliedForce: lực F do người dùng (thành phần ngang).
+ */
+export function applyHorizontalFriction(body, mass, g, mu, appliedForce) {
+  if (mu <= 0 || mass <= 0) return;
+
+  const frictionMag = mu * mass * g;
+  const drive = { x: appliedForce.x, y: 0, z: appliedForce.z };
+  const driveMag = Math.hypot(drive.x, drive.z);
+  const speed = Math.hypot(body.velocity.x, body.velocity.z);
+
+  let fx;
+  let fz;
+  if (speed > 0.02) {
+    const scale = -frictionMag / speed;
+    fx = body.velocity.x * scale;
+    fz = body.velocity.z * scale;
+  } else if (driveMag <= frictionMag) {
+    fx = -drive.x;
+    fz = -drive.z;
+  } else {
+    const scale = -frictionMag / driveMag;
+    fx = drive.x * scale;
+    fz = drive.z * scale;
+  }
+
+  applyForceVector(body, { x: fx, y: 0, z: fz });
+}

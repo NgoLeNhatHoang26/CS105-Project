@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS, ARENA_HALF } from '../constants.js';
 import {
@@ -19,7 +17,12 @@ import {
   positionFromBody,
   velocityFromBody,
 } from '../physics/calculator.js';
-import { applyForceVector, clearForces, forceFromAngles } from '../physics/forceManager.js';
+import {
+  applyForceVector,
+  applyHorizontalFriction,
+  clearForces,
+  forceFromAngles,
+} from '../physics/forceManager.js';
 import { getState } from '../state.js';
 
 export class Scene3Horizontal extends BaseScene {
@@ -48,13 +51,6 @@ export class Scene3Horizontal extends BaseScene {
     physics.addBody(groundBody);
 
     this._buildWalls();
-    this._buildObject(getState().sceneParams);
-
-    this.objects.forEach((o) => {
-      scene.add(o.mesh);
-      physics.addBody(o.body);
-      saveInitialPose(o);
-    });
     this.staticBodies.forEach((b) => physics.addBody(b));
     this.onParameterChange();
   }
@@ -80,15 +76,41 @@ export class Scene3Horizontal extends BaseScene {
     });
   }
 
+  _objectSpawnY(params) {
+    if (params.shape === 'sphere') {
+      return (params.sphereRadius ?? 0.4) + 0.05;
+    }
+    return (params.boxSize ?? 0.6) / 2 + 0.05;
+  }
+
+  _configureObjectPhysics(sim, params) {
+    const { body } = sim;
+    if (params.shape === 'box') {
+      // Mô hình ma sát trượt: hộp không lăn trên mặt phẳng ngang.
+      body.fixedRotation = true;
+      body.angularFactor.set(0, 0, 0);
+    } else {
+      body.fixedRotation = false;
+      body.angularFactor.set(1, 1, 1);
+    }
+    body.mass = params.mass;
+    body.updateMassProperties();
+    body.angularVelocity.set(0, 0, 0);
+    body.allowSleep = false;
+    body.wakeUp();
+  }
+
   _buildObject(params) {
     const old = this.objects[0];
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
       this._deps.physics.removeBody(old.body);
+      const idx = this.meshes.indexOf(old.mesh);
+      if (idx >= 0) this.meshes.splice(idx, 1);
       disposePair(old);
     }
     const mass = params.mass;
-    const pos = { x: 0, y: (params.boxSize ?? 0.6) / 2 + 0.05, z: 0 };
+    const pos = { x: 0, y: this._objectSpawnY(params), z: 0 };
     let pair;
     if (params.shape === 'sphere') {
       pair = createSpherePair({
@@ -115,21 +137,37 @@ export class Scene3Horizontal extends BaseScene {
   onParameterChange() {
     const params = getState().sceneParams;
     this._deps.physics.setGravity(getState().global.gravity);
-    this._deps.physics.setDefaultFriction(params.friction);
-    if (this.objects[0]) {
-      const o = this.objects[0];
-      o.body.mass = params.mass;
-      o.body.updateMassProperties();
+    // Ma sát μ do applyHorizontalFriction; tắt ma sát tiếp xúc Cannon (xung đột với fixedRotation).
+    this._deps.physics.setDefaultFriction(0);
+
+    const old = this.objects[0];
+    if (old) {
+      this._deps.view.getScene().remove(old.mesh);
+      this._deps.physics.removeBody(old.body);
+      const idx = this.meshes.indexOf(old.mesh);
+      if (idx >= 0) this.meshes.splice(idx, 1);
+      disposePair(old);
     }
+
+    this._buildObject(params);
+    const scene = this._deps.view.getScene();
+    const obj = this.objects[0];
+    scene.add(obj.mesh);
+    this._deps.physics.addBody(obj.body);
+    this._configureObjectPhysics(obj, params);
+    saveInitialPose(obj);
+    this._stopped = false;
   }
 
   applyRuntimeForces() {
     if (this._stopped || !this.objects[0]) return;
     const params = getState().sceneParams;
+    const g = getState().global.gravity;
     const obj = this.objects[0];
     clearForces(obj.body);
-    const f = forceFromAngles(params.forceMag, params.forceAngleDeg, 'xz');
-    applyForceVector(obj.body, f);
+    const applied = forceFromAngles(params.forceMag, params.forceAngleDeg, 'xz');
+    applyForceVector(obj.body, applied);
+    applyHorizontalFriction(obj.body, params.mass, g, params.friction, applied);
   }
 
   update() {
@@ -141,6 +179,7 @@ export class Scene3Horizontal extends BaseScene {
     const limit = ARENA_HALF - 1;
     if (Math.abs(p.x) > limit || Math.abs(p.z) > limit) {
       obj.body.velocity.set(0, 0, 0);
+      obj.body.angularVelocity.set(0, 0, 0);
       this.stopSimulation();
       return;
     }
@@ -148,8 +187,11 @@ export class Scene3Horizontal extends BaseScene {
     const params = getState().sceneParams;
     const speed = vecLength(obj.body.velocity.x, 0, obj.body.velocity.z);
     const maxF = params.friction * params.mass * getState().global.gravity;
-    if (speed < 0.05 && params.forceMag <= maxF) {
+    const applied = forceFromAngles(params.forceMag, params.forceAngleDeg, 'xz');
+    const appliedHoriz = vecLength(applied.x, 0, applied.z);
+    if (speed < 0.05 && appliedHoriz <= maxF) {
       obj.body.velocity.set(0, 0, 0);
+      obj.body.angularVelocity.set(0, 0, 0);
     }
   }
 

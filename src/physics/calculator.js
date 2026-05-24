@@ -67,6 +67,15 @@ export function momentum1D(masses, velocities) {
   return masses.reduce((p, m, i) => p + m * velocities[i], 0);
 }
 
+/** Vận tốc sau va chạm 1D (momentum + hệ số phục hồi e). */
+export function solve1DCollision(m1, m2, v1, v2, e = 1) {
+  const sum = m1 + m2;
+  if (sum <= 0) return { v1After: v1, v2After: v2 };
+  const v1After = (m1 * v1 + m2 * v2 - e * m2 * (v2 - v1)) / sum;
+  const v2After = (m1 * v1 + m2 * v2 + e * m1 * (v2 - v1)) / sum;
+  return { v1After, v2After };
+}
+
 export function totalKineticEnergy(objects) {
   return objects.reduce((sum, o) => {
     const v = o.body?.velocity ?? o.velocity;

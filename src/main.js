@@ -75,10 +75,8 @@ document.getElementById('btn-play')?.addEventListener('click', () => {
   setPlayback('play');
   ui.setRunningLocks();
   const s = getState();
-  if (s.currentSceneId === 4 && sceneManager.getActiveScene()) {
-    const params = s.sceneParams;
-    const o2 = sceneManager.getActiveScene().objects[1];
-    if (o2) o2.body.velocity.set(params.object2InitVelocity, 0, 0);
+  if (s.currentSceneId === 4) {
+    sceneManager.getActiveScene()?.applyPlayInitialState?.();
   }
 });
 

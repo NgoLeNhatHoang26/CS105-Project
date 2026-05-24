@@ -9,6 +9,7 @@ import {
 import { SCENE_NAMES, SPEED_OPTIONS, SCENE_IDS } from '../constants.js';
 import { getSceneGuiConfig } from './panels.js';
 import { formatNum } from '../utils/helpers.js';
+import { applyCollisionPresetToParams } from '../scenes/collisionPresets.js';
 
 export class UIManager {
   constructor({ onSceneChange, onParamChange }) {
@@ -84,10 +85,18 @@ export class UIManager {
       if (item.options) {
         const c = this.sceneFolder.add(params, item.prop, item.options).name(item.key);
         c.onChange(() => {
+          if (item.applyPreset) {
+            applyCollisionPresetToParams(params, params.collisionMode);
+            this.controllers.forEach(({ ctrl }) => ctrl.updateDisplay());
+          }
           this.onParamChange(item.prop);
         });
         this.controllers.push({ ctrl: c, ...item });
         if (item.inactive) c.disable();
+      } else if (item.prop === 'pauseOnCollision' || item.prop === 'gravityEnabled') {
+        const c = this.sceneFolder.add(params, item.prop).name(item.key);
+        c.onChange(() => this.onParamChange(item.prop));
+        this.controllers.push({ ctrl: c, ...item });
       } else {
         const c = this.sceneFolder
           .add(params, item.prop, item.min, item.max, item.step)
@@ -166,6 +175,12 @@ export class UIManager {
       if (sp.height != null) text += `h = ${formatNum(sp.height)} m\n`;
       if (sp.horizontalX != null) text += `x = ${formatNum(sp.horizontalX)} m\n`;
       if (sp.totalMomentum != null) text += `p = ${formatNum(sp.totalMomentum)} kg·m/s\n`;
+      if (sp.object1Velocity) {
+        text += `v₁ = (${formatNum(sp.object1Velocity.x)}, ${formatNum(sp.object1Velocity.y)}, ${formatNum(sp.object1Velocity.z)}) m/s\n`;
+      }
+      if (sp.object2Velocity) {
+        text += `v₂ = (${formatNum(sp.object2Velocity.x)}, ${formatNum(sp.object2Velocity.y)}, ${formatNum(sp.object2Velocity.z)}) m/s\n`;
+      }
       if (sp.status) text += `Trạng thái: ${sp.status}\n`;
       if (sp.collision) {
         const c = sp.collision;
@@ -173,6 +188,10 @@ export class UIManager {
         text += `p (sau) = ${formatNum(c.after?.momentum)}\n`;
         text += `ΔEk = ${formatNum(c.energyLoss)} J\n`;
         text += `e ≈ ${formatNum(c.restitutionObserved)}\n`;
+        if (c.analytic?.v1) {
+          text += `v₁' (lý thuyết) ≈ ${formatNum(c.analytic.v1.x)} m/s\n`;
+          text += `v₂' (lý thuyết) ≈ ${formatNum(c.analytic.v2.x)} m/s\n`;
+        }
       }
     }
 
