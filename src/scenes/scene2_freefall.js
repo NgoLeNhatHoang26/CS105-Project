@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS } from '../constants.js';
 import {
@@ -18,8 +17,16 @@ import {
   positionFromBody,
   velocityFromBody,
 } from '../physics/calculator.js';
-import { applyForceVector, clearForces, forceFromAngles } from '../physics/forceManager.js';
+import { applyForceVector, clearForces } from '../physics/forceManager.js';
 import { getState } from '../state.js';
+import {
+  GROUND_EPS,
+  getObjectRadius,
+  centerYFromBottomHeight,
+  bottomYFromCenterY,
+  minCenterYAtGround,
+  theoreticalFreeFall,
+} from './scene2Helpers.js';
 
 export class Scene2FreeFall extends BaseScene {
   constructor() {
@@ -61,15 +68,17 @@ export class Scene2FreeFall extends BaseScene {
       disposePair(old);
     }
 
-    const h = params.initialHeight;
+    const r = getObjectRadius(params);
+    const bottomH = params.initialHeight;
     const mass = params.mass;
-    const pos = { x: 0, y: h, z: 0 };
+    const pos = { x: 0, y: centerYFromBottomHeight(bottomH, r), z: 0 };
+    const bodyOpts = { mass, position: pos, damping: false };
+
     let pair;
     if (params.shape === 'sphere') {
       pair = createSpherePair({
-        radius: params.sphereRadius ?? 0.4,
-        mass,
-        position: pos,
+        radius: r,
+        ...bodyOpts,
         color: 0xe94560,
       });
     } else {
@@ -78,15 +87,17 @@ export class Scene2FreeFall extends BaseScene {
         width: s,
         height: s,
         depth: s,
-        mass,
-        position: pos,
+        ...bodyOpts,
         color: 0x4a90d9,
       });
     }
+
     const sim = {
       id: 'object_1',
       ...pair,
       mass,
+      radius: r,
+      releaseHeight: bottomH,
       selectable: true,
       reset: () => resetSimObject(sim),
     };
@@ -130,11 +141,10 @@ export class Scene2FreeFall extends BaseScene {
     const obj = this.objects[0];
     if (!obj || this._stopped) return;
     syncMeshFromBody(obj.mesh, obj.body);
-    const params = getState().sceneParams;
-    const r =
-      params.shape === 'sphere' ? params.sphereRadius ?? 0.4 : (params.boxSize ?? 0.6) / 2;
-    if (obj.body.position.y <= r + 0.02) {
-      obj.body.position.y = r + 0.02;
+    const r = obj.radius ?? getObjectRadius(getState().sceneParams);
+    const yMin = minCenterYAtGround(r);
+    if (obj.body.position.y <= yMin) {
+      obj.body.position.y = yMin;
       obj.body.velocity.set(0, 0, 0);
       obj.body.angularVelocity.set(0, 0, 0);
       syncMeshFromBody(obj.mesh, obj.body);
@@ -151,6 +161,8 @@ export class Scene2FreeFall extends BaseScene {
 
     const pos = positionFromBody(obj.body);
     const vel = velocityFromBody(obj.body);
+    const r = obj.radius ?? getObjectRadius(params);
+    const releaseH = obj.releaseHeight ?? params.initialHeight;
     const hRad = degToRad(params.forceAngleHorizontal);
     const vRad = degToRad(params.forceAngleVertical);
     const appliedVec = {
@@ -164,25 +176,32 @@ export class Scene2FreeFall extends BaseScene {
       y: appliedVec.y + gravityVec.y,
       z: appliedVec.z + gravityVec.z,
     };
-    const ax = params.mass > 0 ? netVec.x / params.mass : 0;
-    const forces = freeFallForces(params.mass, g, ax);
-    const nearGround = pos.y <= (params.boxSize ?? 0.6) / 2 + 0.05;
+    const forces = freeFallForces(params.mass, g, appliedVec, netVec);
+    const heightBottom = bottomYFromCenterY(pos.y, r);
+    const nearGround = heightBottom <= GROUND_EPS + 0.05;
+    const pureFreeFall = params.forceMag === 0;
+    const t = s.simulationTime;
+    const theory = pureFreeFall ? theoreticalFreeFall(g, t, releaseH) : null;
 
     return {
-      time: s.simulationTime,
+      time: t,
       sceneName: this.name,
       mass: params.mass,
       position: pos,
       velocity: vel,
       speed: vecLength(vel.x, vel.y, vel.z),
-      acceleration: { x: forces.accelerationX, y: forces.accelerationY, z: 0 },
+      acceleration: {
+        x: forces.accelerationX,
+        y: forces.accelerationY,
+        z: forces.accelerationZ,
+      },
       kineticEnergy: kineticEnergy(params.mass, vel.x, vel.y, vel.z),
       forces: {
         gravity: forces.gravity,
-        applied: params.forceMag,
+        applied: forces.applied,
         normal: nearGround ? forces.gravity : 0,
         friction: 0,
-        net: Math.sqrt(netVec.x ** 2 + netVec.y ** 2 + netVec.z ** 2),
+        net: forces.net,
       },
       forceVectors: {
         applied: appliedVec,
@@ -192,9 +211,13 @@ export class Scene2FreeFall extends BaseScene {
         net: netVec,
       },
       sceneSpecific: {
-        height: pos.y,
+        heightBottom,
+        centerY: pos.y,
+        releaseHeight: releaseH,
         horizontalX: pos.x,
-        predictedImpact: params.forceMag === 0 ? Math.sqrt((2 * params.initialHeight) / g) : null,
+        onGround: this._stopped || nearGround,
+        predictedImpact: pureFreeFall && g > 0 ? Math.sqrt((2 * releaseH) / g) : null,
+        theoretical: theory,
       },
     };
   }

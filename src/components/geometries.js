@@ -5,7 +5,16 @@ import { createPhongMaterial } from './materials.js';
 /**
  * Factory mesh + Cannon body — transformation sync từ physics.
  */
-export function createBoxPair({ width, height, depth, mass, position, color, material }) {
+export function createBoxPair({
+  width,
+  height,
+  depth,
+  mass,
+  position,
+  color,
+  material,
+  damping = true,
+}) {
   const w = width ?? 1;
   const h = height ?? 1;
   const d = depth ?? 1;
@@ -20,14 +29,14 @@ export function createBoxPair({ width, height, depth, mass, position, color, mat
   const body = new CANNON.Body({ mass, shape });
   body.position.set(position.x, position.y, position.z);
   if (mass > 0) {
-    body.linearDamping = 0.01;
-    body.angularDamping = 0.1;
+    body.linearDamping = damping ? 0.01 : 0;
+    body.angularDamping = damping ? 0.1 : 0;
   }
 
   return { mesh, body, geometry: geo, material: mat, shapeType: 'box' };
 }
 
-export function createSpherePair({ radius, mass, position, color, material }) {
+export function createSpherePair({ radius, mass, position, color, material, damping = true }) {
   const r = radius ?? 0.5;
   const geo = new THREE.SphereGeometry(r, 32, 32);
   const mat = material ?? createPhongMaterial(color ?? 0xe94560);
@@ -40,8 +49,8 @@ export function createSpherePair({ radius, mass, position, color, material }) {
   const body = new CANNON.Body({ mass, shape });
   body.position.set(position.x, position.y, position.z);
   if (mass > 0) {
-    body.linearDamping = 0.01;
-    body.angularDamping = 0.1;
+    body.linearDamping = damping ? 0.01 : 0;
+    body.angularDamping = damping ? 0.1 : 0;
   }
 
   return { mesh, body, geometry: geo, material: mat, shapeType: 'sphere' };

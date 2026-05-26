@@ -48,6 +48,7 @@ export const DEFAULT_SCENE_PARAMS = {
   },
   2: {
     mass: 5,
+    /** Độ cao đáy vật so với mặt đất (m), không phải tọa độ tâm. */
     initialHeight: 20,
     angleDeg: 30,
     length: 5,

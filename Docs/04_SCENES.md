@@ -152,7 +152,7 @@ F_net = F + mg sin(θ) - μmg cos(θ)
 | Tham số | Range | Default | Unit | Type |
 |--------|-------|---------|------|------|
 | Mass (m) | 0.1 - 50 | 5 | kg | RUNNING: DISABLE |
-| Initial Height (h) | 1 - 100 | 20 | m | RUNNING: DISABLE |
+| Initial Height (h) — độ cao **đáy** vật | 1 - 100 | 20 | m | RUNNING: DISABLE |
 | Force F mag | 0 - 100 | 0 | N | RUNNING: **ENABLE** |
 | Force F ang (horizontal) | 0° - 360° | 0° | degree | RUNNING: **ENABLE** |
 | Force F ang (vertical) | -90° - +90° | 0° | degree | RUNNING: **ENABLE** |

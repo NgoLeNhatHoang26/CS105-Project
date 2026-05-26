@@ -52,14 +52,30 @@ export function horizontalForces(mass, g, mu, appliedF, velX, velZ) {
   };
 }
 
-export function freeFallForces(mass, g, ax = 0) {
+/**
+ * Lực và gia tốc rơi tự do / ném (lực F áp dụng theo vector).
+ * appliedVec, netVec: thành phần lực (N).
+ */
+export function freeFallForces(mass, g, appliedVec = { x: 0, y: 0, z: 0 }, netVec = null) {
   const weight = mass * g;
+  const net = netVec ?? {
+    x: appliedVec.x,
+    y: appliedVec.y - weight,
+    z: appliedVec.z ?? 0,
+  };
+  const m = mass > 0 ? mass : 1;
+  const ax = net.x / m;
+  const ay = net.y / m;
+  const az = (net.z ?? 0) / m;
+  const appliedMag = vecLength(appliedVec.x, appliedVec.y, appliedVec.z ?? 0);
+  const netMag = vecLength(net.x, net.y, net.z ?? 0);
   return {
     gravity: weight,
-    applied: mass * ax,
-    net: mass * ax,
-    accelerationY: -g,
+    applied: appliedMag,
+    net: netMag,
     accelerationX: ax,
+    accelerationY: ay,
+    accelerationZ: az,
   };
 }
 
