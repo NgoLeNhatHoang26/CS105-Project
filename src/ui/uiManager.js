@@ -11,6 +11,103 @@ import { getSceneGuiConfig } from './panels.js';
 import { formatNum } from '../utils/helpers.js';
 import { applyCollisionPresetToParams } from '../scenes/collisionPresets.js';
 
+/** Per-scene formula definitions (display only, no physics logic). */
+const SCENE_FORMULAS = {
+  1: {
+    title: 'Mặt phẳng nghiêng',
+    groups: [
+      {
+        title: 'Lực tác dụng',
+        rows: [
+          { sym: 'W',     eq: '= m·g' },
+          { sym: 'N',     eq: '= m·g·cos θ' },
+          { sym: 'f',     eq: '= μ·N' },
+          { sym: 'F_net', eq: '= F − m·g·sin θ − f' },
+        ],
+      },
+      {
+        title: 'Chuyển động',
+        rows: [
+          { sym: 'a',    eq: '= F_net / m' },
+          { sym: 'v(t)', eq: '= v₀ + a·t' },
+          { sym: 's(t)', eq: '= v₀t + ½·a·t²' },
+          { sym: 'Ek',   eq: '= ½·m·v²' },
+        ],
+      },
+    ],
+  },
+  2: {
+    title: 'Rơi tự do',
+    groups: [
+      {
+        title: 'Chuyển động',
+        rows: [
+          { sym: 'y(t)',    eq: '= y₀ − ½·g·t²' },
+          { sym: 'v_y(t)', eq: '= g·t  (↓)' },
+          { sym: 'v_chạm', eq: '= √(2·g·h)' },
+          { sym: 't_chạm', eq: '= √(2·h / g)' },
+        ],
+      },
+      {
+        title: 'Năng lượng',
+        rows: [
+          { sym: 'Ek',     eq: '= ½·m·v²' },
+          { sym: 'Ep',     eq: '= m·g·h' },
+          { sym: 'E_cơ',  eq: '= Ek + Ep = const' },
+        ],
+      },
+    ],
+  },
+  3: {
+    title: 'Lực ngang',
+    groups: [
+      {
+        title: 'Lực tác dụng',
+        rows: [
+          { sym: 'N',     eq: '= m·g  (mặt ngang)' },
+          { sym: 'f',     eq: '= μ·N = μ·m·g' },
+          { sym: 'F_net', eq: '= F − f' },
+        ],
+      },
+      {
+        title: 'Chuyển động',
+        rows: [
+          { sym: 'a',    eq: '= (F − μ·m·g) / m' },
+          { sym: 'x(t)', eq: '= ½·a·t²' },
+          { sym: 'v(t)', eq: '= a·t' },
+          { sym: 'Ek',   eq: '= ½·m·v²' },
+        ],
+      },
+    ],
+  },
+  4: {
+    title: 'Va chạm 1D',
+    groups: [
+      {
+        title: 'Bảo toàn động lượng',
+        rows: [
+          { sym: 'p',    eq: '= m₁v₁ + m₂v₂ = const' },
+          { sym: 'e',    eq: '= (v₂′ − v₁′) / (v₁ − v₂)' },
+        ],
+      },
+      {
+        title: 'Vận tốc sau va chạm',
+        rows: [
+          { sym: "v₁′", eq: '= ((m₁−e·m₂)v₁+(1+e)m₂v₂)/(m₁+m₂)' },
+          { sym: "v₂′", eq: '= ((m₂−e·m₁)v₂+(1+e)m₁v₁)/(m₁+m₂)' },
+        ],
+      },
+      {
+        title: 'Năng lượng',
+        rows: [
+          { sym: 'Ek',  eq: '= ½·m·v²' },
+          { sym: 'ΔEk', eq: '= Ek_sau − Ek_trước  (≤ 0)' },
+        ],
+      },
+    ],
+  },
+};
+
 /** UI-only: một dòng label / value trong data panel. */
 function dataRow(label, value, { highlight = false, status } = {}) {
   const cls = ['data-value', highlight && 'highlight', status && `status-${status}`]
@@ -126,6 +223,30 @@ export class UIManager {
     });
     this.sceneFolder.open();
     this.setRunningLocks();
+    this.updateFormulaPanel(sceneId);
+  }
+
+  /** Render static formula definitions for the active scene. */
+  updateFormulaPanel(sceneId) {
+    const el = document.getElementById('formula-content');
+    if (!el) return;
+    const data = SCENE_FORMULAS[sceneId];
+    if (!data) {
+      el.innerHTML = '<p class="data-placeholder">Không có công thức cho scene này.</p>';
+      return;
+    }
+    let html = `<div class="formula-scene-name">${data.title}</div>`;
+    data.groups.forEach((group) => {
+      html += '<div class="formula-group">';
+      if (group.title) {
+        html += `<div class="formula-group-title">${group.title}</div>`;
+      }
+      group.rows.forEach((row) => {
+        html += `<div class="formula-row"><span class="formula-sym">${row.sym}</span><span class="formula-eq">${row.eq}</span></div>`;
+      });
+      html += '</div>';
+    });
+    el.innerHTML = html;
   }
 
   setRunningLocks() {

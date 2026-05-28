@@ -9,17 +9,18 @@
   <body>
     <div id="app">
       <aside id="sidebar" aria-label="Bảng điều khiển">
+
         <header class="app-header">
           <div class="app-brand">
             <span class="app-logo" aria-hidden="true">⚛</span>
             <div>
               <h1>Physics Sim</h1>
-              <p class="subtitle">Mô phỏng vật lý 3D · THCS</p>
+              <p class="subtitle">Mô phỏng vật lý 3D · UIT CS431</p>
             </div>
           </div>
         </header>
 
-        <section class="sidebar-block sidebar-transport" aria-label="Điều khiển mô phỏng">
+        <section class="sidebar-transport" aria-label="Điều khiển mô phỏng">
           <div id="playback-bar" class="playback-bar" role="toolbar" aria-label="Playback">
             <button type="button" id="btn-play" class="btn btn-play primary" title="Play (Space)">
               <span class="btn-icon" aria-hidden="true">▶</span>
@@ -29,7 +30,7 @@
               <span class="btn-icon" aria-hidden="true">⏸</span>
               <span class="btn-label">Pause</span>
             </button>
-            <button type="button" id="btn-reset" class="btn btn-reset" title="Reset">
+            <button type="button" id="btn-reset" class="btn btn-reset" title="Reset (R)">
               <span class="btn-icon" aria-hidden="true">↺</span>
               <span class="btn-label">Reset</span>
             </button>
@@ -38,43 +39,93 @@
               <span class="btn-label">View</span>
             </button>
           </div>
-          <p id="drag-hint" class="hint status-hint">STOPPED/PAUSED: click trái để chọn vật, kéo trái để xoay camera.</p>
+          <p id="drag-hint" class="status-hint">STOPPED/PAUSED: click trái để chọn vật, kéo trái để xoay camera.</p>
         </section>
 
-        <section class="sidebar-block sidebar-controls" aria-label="Tham số">
-          <div id="gui-root"></div>
-        </section>
+        <div class="sidebar-body">
 
-        <section id="data-panel" class="sidebar-block data-panel" aria-label="Dữ liệu vật lý">
-          <div class="panel-head">
-            <h2>Dữ liệu vật lý</h2>
-            <span class="panel-badge" id="data-scene-badge">—</span>
-          </div>
-          <div id="data-content" class="data-scroll" role="log" aria-live="polite">
-            <p class="data-placeholder">Chọn scene và bấm Play để xem số liệu thời gian thực.</p>
-          </div>
-          <div class="data-actions" role="group" aria-label="Ghi dữ liệu">
-            <button type="button" id="btn-record" class="btn small">
-              <span aria-hidden="true">＋</span> Ghi mốc
-            </button>
-            <button type="button" id="btn-clear-records" class="btn small">Xóa mốc</button>
-            <button type="button" id="btn-export-csv" class="btn small accent-outline">Export CSV</button>
-          </div>
-          <div id="records-table-wrap" class="records-wrap hidden">
-            <table id="records-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>t (s)</th>
-                  <th>Pos</th>
-                  <th>v (m/s)</th>
-                  <th>Ek (J)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
+          <details class="sidebar-section" open id="section-params">
+            <summary class="section-toggle">
+              <span class="section-title">Tham số</span>
+            </summary>
+            <div class="section-content no-pad">
+              <div id="gui-root"></div>
+            </div>
+          </details>
+
+          <details class="sidebar-section" open id="section-data">
+            <summary class="section-toggle">
+              <span class="section-title">Dữ liệu vật lý</span>
+              <span class="panel-badge" id="data-scene-badge">—</span>
+            </summary>
+            <div class="section-content" id="data-panel">
+              <div id="data-content" class="data-scroll" role="log" aria-live="polite">
+                <p class="data-placeholder">Chọn scene và bấm Play để xem số liệu thời gian thực.</p>
+              </div>
+              <div class="data-actions" role="group" aria-label="Ghi dữ liệu">
+                <button type="button" id="btn-record" class="btn small">
+                  <span aria-hidden="true">＋</span> Ghi mốc
+                </button>
+                <button type="button" id="btn-clear-records" class="btn small">Xóa mốc</button>
+                <button type="button" id="btn-export-csv" class="btn small accent-outline">Export CSV</button>
+              </div>
+              <div id="records-table-wrap" class="records-wrap hidden">
+                <table id="records-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>t (s)</th>
+                      <th>Pos</th>
+                      <th>v (m/s)</th>
+                      <th>Ek (J)</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+
+          <details class="sidebar-section" open id="section-formula">
+            <summary class="section-toggle">
+              <span class="section-title">Công thức</span>
+            </summary>
+            <div class="section-content">
+              <div id="formula-content" class="formula-content">
+                <p class="data-placeholder">Chọn scene để xem công thức.</p>
+              </div>
+            </div>
+          </details>
+
+          <details class="sidebar-section" id="section-help">
+            <summary class="section-toggle">
+              <span class="section-title">Hướng dẫn</span>
+            </summary>
+            <div class="section-content help-content">
+              <ol class="help-steps">
+                <li>Chọn scene trong mục <strong>Tham số → Chọn scene</strong>.</li>
+                <li>Điều chỉnh các tham số vật lý bên dưới (khối lượng, góc, lực...).</li>
+                <li>Nhấn <strong>Play</strong> để chạy mô phỏng.</li>
+                <li>Nhấn <strong>Pause</strong> để tạm dừng, <strong>Reset</strong> để đặt lại.</li>
+                <li>Bật <strong>Vector lực</strong> (Hiển thị) để xem F, W, N, f, F_net.</li>
+                <li>Kéo chuột trái để xoay camera. Cuộn chuột để zoom.</li>
+                <li>Nhấn <strong>View</strong> để reset góc nhìn về mặc định.</li>
+              </ol>
+              <div class="help-shortcuts">
+                <div class="shortcut-row">
+                  <kbd>Space</kbd><span>Play / Pause</span>
+                </div>
+                <div class="shortcut-row">
+                  <kbd>R</kbd><span>Reset</span>
+                </div>
+                <div class="shortcut-row">
+                  <kbd>Drag</kbd><span>Xoay camera</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
+        </div>
       </aside>
 
       <main id="viewport" aria-label="Khung nhìn 3D">
