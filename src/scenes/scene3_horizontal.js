@@ -1,8 +1,6 @@
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS, ARENA_HALF } from '../constants.js';
 import {
-  createBoxPair,
-  createSpherePair,
   createStaticBox,
   saveInitialPose,
   resetSimObject,
@@ -24,6 +22,12 @@ import {
   forceFromAngles,
 } from '../physics/forceManager.js';
 import { getState } from '../state.js';
+import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+
+function parseColor(hex, fallback = 0x4a90d9) {
+  if (typeof hex !== 'string') return fallback;
+  return Number.parseInt(hex.replace('#', ''), 16) || fallback;
+}
 
 export class Scene3Horizontal extends BaseScene {
   constructor() {
@@ -77,15 +81,12 @@ export class Scene3Horizontal extends BaseScene {
   }
 
   _objectSpawnY(params) {
-    if (params.shape === 'sphere') {
-      return (params.sphereRadius ?? 0.4) + 0.05;
-    }
-    return (params.boxSize ?? 0.6) / 2 + 0.05;
+    return ((params.boxSize ?? 0.6) * (params.graphicsScale ?? 1)) / 2 + 0.05;
   }
 
   _configureObjectPhysics(sim, params) {
     const { body } = sim;
-    if (params.shape === 'box') {
+    if ((params.graphicsShape ?? params.shape ?? 'box') === 'box') {
       // Mô hình ma sát trượt: hộp không lăn trên mặt phẳng ngang.
       body.fixedRotation = true;
       body.angularFactor.set(0, 0, 0);
@@ -111,18 +112,16 @@ export class Scene3Horizontal extends BaseScene {
     }
     const mass = params.mass;
     const pos = { x: 0, y: this._objectSpawnY(params), z: 0 };
-    let pair;
-    if (params.shape === 'sphere') {
-      pair = createSpherePair({
-        radius: params.sphereRadius ?? 0.4,
-        mass,
-        position: pos,
-        color: 0x4a90d9,
-      });
-    } else {
-      const s = params.boxSize ?? 0.6;
-      pair = createBoxPair({ width: s, height: s, depth: s, mass, position: pos, color: 0x4a90d9 });
-    }
+    const pair = createExperimentPair({
+      shape: params.graphicsShape ?? params.shape ?? 'box',
+      size: (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1),
+      mass,
+      position: pos,
+      color: parseColor(params.graphicsColor, 0x4a90d9),
+      wireframe: params.graphicsWireframe,
+      textureMap: this._deps.textureMap,
+      textureName: params.graphicsMaterial ?? 'default',
+    });
     const sim = {
       id: 'object_1',
       ...pair,
@@ -132,6 +131,7 @@ export class Scene3Horizontal extends BaseScene {
     };
     this.objects = [sim];
     this.meshes.push(sim.mesh);
+    applyVisualRotation(sim, params);
   }
 
   onParameterChange() {

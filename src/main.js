@@ -7,6 +7,8 @@ import { UIManager } from './ui/uiManager.js';
 import { initStats } from './ui/stats.js';
 import { DebugVisualizer } from './visualization/debugHelpers.js';
 import { ForceVisualizer } from './visualization/vectorHelpers.js';
+import { buildTextureMap } from './graphics/proceduralTextures.js';
+import { syncMeshFromBody } from './components/geometries.js';
 import {
   getState,
   setPlayback,
@@ -27,8 +29,10 @@ const canvas = document.getElementById('canvas');
 const view = new ViewRenderer(canvas);
 view.init();
 
+const textureMap = buildTextureMap();
+
 const physics = new PhysicsEngine(getState().global.gravity);
-const sceneManager = new SceneManager(view, physics);
+const sceneManager = new SceneManager(view, physics, textureMap);
 
 sceneManager.setOnStop(() => setPlayback('pause'));
 
@@ -71,6 +75,15 @@ const ui = new UIManager({
   },
 });
 
+// ── Graphics panel (appended to lil-gui after UIManager is ready) ──────────
+ui.buildGraphicsPanel({
+  lights: view.lights,
+  view,
+  controls,
+  sceneManager,
+});
+// ───────────────────────────────────────────────────────────────────────────
+
 document.getElementById('btn-play')?.addEventListener('click', () => {
   setPlayback('play');
   ui.setRunningLocks();
@@ -99,7 +112,9 @@ document.getElementById('btn-reset-view')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-record')?.addEventListener('click', () => {
-  const telemetry = sceneManager.getTelemetry();
+  const raw = sceneManager.getTelemetry();
+  const sceneStopped = sceneManager.getActiveScene()?.isStopped?.() ?? false;
+  const telemetry = ui.resolveTelemetryDisplay(raw, sceneStopped);
   addRecordedPoint(createDataPoint(telemetry));
   ui.updateRecordsTable();
 });
@@ -157,12 +172,13 @@ function loop(now) {
     syncMeshes();
   }
 
-  const telemetry = sceneManager.getTelemetry();
-  ui.refreshDataPanel(telemetry);
+  const raw = sceneManager.getTelemetry();
+  const sceneStopped = sceneManager.getActiveScene()?.isStopped?.() ?? false;
+  ui.refreshDataPanel(ui.resolveTelemetryDisplay(raw, sceneStopped));
   ui.setRunningLocks();
 
-  const origin = telemetry.position ?? { x: 0, y: 1, z: 0 };
-  forceViz.updateFromTelemetry(telemetry, origin);
+  const origin = raw.position ?? { x: 0, y: 1, z: 0 };
+  forceViz.updateFromTelemetry(raw, origin);
   debugViz.update();
 
   controls.update();

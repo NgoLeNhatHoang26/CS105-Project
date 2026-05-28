@@ -2,23 +2,36 @@ import * as THREE from 'three';
 import { SHADOW_MAP_SIZE } from '../constants.js';
 
 /**
- * Ánh sáng Phong: Ambient (môi trường) + Directional (khuếch tán + specular).
+ * Chiếu sáng 3 loại:
+ *   - AmbientLight   (ánh sáng môi trường)
+ *   - DirectionalLight (ánh sáng định hướng, có bóng đổ / shadow mapping)
+ *   - PointLight     (ánh sáng điểm, warm accent)
  */
 export function setupSceneLights(scene) {
+  // ── Ambient Light ──────────────────────────────────────────────────────────
   const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+
+  // ── Directional Light (with PCFSoft shadow map) ───────────────────────────
   const directional = new THREE.DirectionalLight(0xffffff, 0.85);
   directional.position.set(15, 25, 12);
   directional.castShadow = true;
-  directional.shadow.mapSize.width = SHADOW_MAP_SIZE;
+  directional.shadow.mapSize.width  = SHADOW_MAP_SIZE;
   directional.shadow.mapSize.height = SHADOW_MAP_SIZE;
-  directional.shadow.camera.near = 0.5;
-  directional.shadow.camera.far = 80;
-  directional.shadow.camera.left = -25;
-  directional.shadow.camera.right = 25;
-  directional.shadow.camera.top = 25;
+  directional.shadow.camera.near   = 0.5;
+  directional.shadow.camera.far    = 80;
+  // Wide shadow frustum to cover all experiment scenes.
+  directional.shadow.camera.left   = -25;
+  directional.shadow.camera.right  = 30;
+  directional.shadow.camera.top    = 25;
   directional.shadow.camera.bottom = -25;
   directional.shadow.bias = -0.0005;
 
-  scene.add(ambient, directional);
-  return { ambient, directional, all: [ambient, directional] };
+  // ── Point Light (ánh sáng điểm) ───────────────────────────────────────────
+  // Warm fill light positioned above the center of the scene.
+  // castShadow = false for performance; the directional light handles shadows.
+  const pointLight = new THREE.PointLight(0xffa060, 0.55, 35, 1.2);
+  pointLight.position.set(4, 10, 6);
+
+  scene.add(ambient, directional, pointLight);
+  return { ambient, directional, pointLight, all: [ambient, directional, pointLight] };
 }

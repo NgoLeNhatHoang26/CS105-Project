@@ -44,7 +44,6 @@ export function getSceneGuiConfig(sceneId, state) {
     return [
       { key: 'khối lượng (kg)', prop: 'mass', min: 0.1, max: 50, step: 0.1, lockRunning: true },
       { key: 'h — độ cao đáy (m)', prop: 'initialHeight', min: 1, max: 100, step: 0.5, lockRunning: true },
-      { key: 'hình dạng', prop: 'shape', options: ['box', 'sphere'], lockRunning: true },
       { ...INCLINE_ANGLE, inactive: true },
       { ...INCLINE_LENGTH, inactive: true },
       { ...INCLINE_FRICTION, inactive: true },
@@ -59,7 +58,6 @@ export function getSceneGuiConfig(sceneId, state) {
       { ...INCLINE_ANGLE, inactive: true },
       { ...INCLINE_LENGTH, inactive: true },
       { ...INCLINE_FRICTION },
-      { key: 'hình dạng', prop: 'shape', options: ['box', 'sphere'], lockRunning: true },
       { key: '|F| (N)', prop: 'forceMag', min: 0, max: 100, step: 1, lockRunning: false },
       { key: 'góc F (°)', prop: 'forceAngleDeg', min: 0, max: 360, step: 1, lockRunning: false },
     ];

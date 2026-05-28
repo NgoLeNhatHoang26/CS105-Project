@@ -63,6 +63,19 @@ export class ViewRenderer {
     if (this.scene.fog) this.scene.fog.color = this.scene.background;
   }
 
+  /**
+   * Toggle shadow map rendering.
+   * Forces material re-upload so objects appear correctly after toggling.
+   */
+  setShadows(enabled) {
+    this.renderer.shadowMap.enabled = enabled;
+    this.scene.traverse((obj) => {
+      if (obj.isMesh && obj.material) {
+        obj.material.needsUpdate = true;
+      }
+    });
+  }
+
   render() {
     this.renderer.render(this.scene, this.camera);
   }

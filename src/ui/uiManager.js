@@ -121,6 +121,13 @@ function dataSection(title, rowsHtml) {
   return `<div class="data-section"><div class="data-section-title">${title}</div>${rowsHtml}</div>`;
 }
 
+/** Move camera back to the default physics view. */
+function _focusPhysicsCamera(view, controls) {
+  view.getCamera().position.set(8, 12, 18);
+  controls.target.set(0, 2, 0);
+  controls.update();
+}
+
 export class UIManager {
   constructor({ onSceneChange, onParamChange }) {
     this.onSceneChange = onSceneChange;
@@ -128,8 +135,41 @@ export class UIManager {
     this.gui = new GUI({ container: document.getElementById('gui-root'), title: 'Tham số' });
     this.controllers = [];
     this.sceneFolder = null;
+    /** Snapshot v/a/Ek cho panel khi scene dừng hết hành trình (chỉ hiển thị). */
+    this._frozenKinematics = null;
     this._buildGlobal();
     subscribe(() => this.setRunningLocks());
+  }
+
+  /**
+   * Giữ v, a, Ek trên panel Dữ liệu vật lý (và khi Ghi mốc) tại thời điểm vật dừng.
+   * Không thay đổi physics hay getTelemetry() của scene.
+   */
+  resolveTelemetryDisplay(telemetry, sceneStopped) {
+    if (!telemetry) return telemetry;
+
+    if (getState().simulationTime === 0) {
+      this._frozenKinematics = null;
+    }
+
+    const speed = telemetry.speed ?? 0;
+    const ek = telemetry.kineticEnergy ?? 0;
+    const hasMotion = speed > 1e-6 || ek > 1e-6;
+
+    if (isRunning() && hasMotion) {
+      this._frozenKinematics = {
+        velocity: telemetry.velocity ? { ...telemetry.velocity } : null,
+        speed: telemetry.speed,
+        acceleration: telemetry.acceleration ? { ...telemetry.acceleration } : null,
+        kineticEnergy: telemetry.kineticEnergy,
+      };
+    }
+
+    if (sceneStopped && this._frozenKinematics) {
+      return { ...telemetry, ...this._frozenKinematics };
+    }
+
+    return telemetry;
   }
 
   _buildGlobal() {
@@ -362,6 +402,182 @@ export class UIManager {
       dataSection('Chuyển động', kin) +
       dataSection('Lực (N)', forces) +
       dataSection('Scene', scene);
+  }
+
+  buildGraphicsPanel({ lights, view, controls, sceneManager }) {
+    const gfx = this.gui.addFolder('Thuộc tính');
+    gfx.close();
+    const graphicShapes = ['box', 'sphere', 'cone', 'cylinder', 'wheel', 'teapot'];
+    const graphicMaterials = ['default', 'checker', 'wood', 'metal', 'brick', 'marble'];
+
+    const params = getState().sceneParams;
+    const sceneId = getState().currentSceneId;
+    const panelState = {
+      target: params.graphicsTarget ?? 'object_1',
+      shape: 'box',
+      material: 'default',
+      color: '#4a90d9',
+      wireframe: false,
+      scale: 1,
+      rotX: 0,
+      rotY: 0,
+      rotZ: 0,
+    };
+
+    const keyFor = (name) => {
+      if (getState().currentSceneId !== SCENE_IDS.COLLISION) return `graphics${name}`;
+      const suffix = panelState.target === 'object_2' ? 'Object2' : 'Object1';
+      return `graphics${suffix}${name}`;
+    };
+
+    const readCurrentGraphics = () => {
+      const sp = getState().sceneParams;
+      panelState.shape = sp[keyFor('Shape')] ?? 'box';
+      panelState.material = sp[keyFor('Material')] ?? 'default';
+      panelState.color = sp[keyFor('Color')] ?? '#4a90d9';
+      panelState.wireframe = Boolean(sp[keyFor('Wireframe')]);
+      panelState.scale = sp[keyFor('Scale')] ?? 1;
+      panelState.rotX = sp[keyFor('RotX')] ?? 0;
+      panelState.rotY = sp[keyFor('RotY')] ?? 0;
+      panelState.rotZ = sp[keyFor('RotZ')] ?? 0;
+    };
+    readCurrentGraphics();
+
+    const syncActiveScene = () => {
+      if (isRunning()) return;
+      sceneManager.onParameterChange();
+    };
+
+    const shapeFolder = gfx.addFolder('Vật thí nghiệm');
+    if (getState().currentSceneId === SCENE_IDS.COLLISION) {
+      shapeFolder
+        .add(panelState, 'target', { 'Object 1': 'object_1', 'Object 2': 'object_2' })
+        .name('Object target')
+        .onChange((v) => {
+          setParameter('graphicsTarget', v);
+          readCurrentGraphics();
+          shapeCtrl.updateDisplay();
+          materialCtrl.updateDisplay();
+          colorCtrl.updateDisplay();
+          wireCtrl.updateDisplay();
+          scaleCtrl.updateDisplay();
+          rotXCtrl.updateDisplay();
+          rotYCtrl.updateDisplay();
+          rotZCtrl.updateDisplay();
+        });
+    }
+    const shapeCtrl = shapeFolder
+      .add(panelState, 'shape', graphicShapes)
+      .name('Hình dạng')
+      .onChange((v) => {
+        setParameter(keyFor('Shape'), v);
+        syncActiveScene();
+      });
+    const materialCtrl = shapeFolder
+      .add(panelState, 'material', graphicMaterials)
+      .name('Material/Texture')
+      .onChange((v) => {
+        setParameter(keyFor('Material'), v);
+        syncActiveScene();
+      });
+    const colorCtrl = shapeFolder.addColor(panelState, 'color').name('Màu').onChange((v) => {
+      setParameter(keyFor('Color'), v);
+      syncActiveScene();
+    });
+    const wireCtrl = shapeFolder.add(panelState, 'wireframe').name('Wireframe').onChange((v) => {
+      setParameter(keyFor('Wireframe'), v);
+      syncActiveScene();
+    });
+
+    // ── Camera ─────────────────────────────────────────────────────────────
+    const camPosFolder = gfx.addFolder('Vị trí camera');
+    const camPos = { x: 8, y: 12, z: 18 };
+    const updateCam = () => {
+      const cam = view.getCamera();
+      cam.position.set(
+        Math.max(-60, Math.min(60, camPos.x)),
+        Math.max(0.5, Math.min(60, camPos.y)),
+        Math.max(-60, Math.min(60, camPos.z)),
+      );
+      controls.update();
+    };
+    camPosFolder.add(camPos, 'x', -40, 40, 0.5).name('Camera X').onChange(updateCam);
+    camPosFolder.add(camPos, 'y',   1, 50, 0.5).name('Camera Y').onChange(updateCam);
+    camPosFolder.add(camPos, 'z', -40, 40, 0.5).name('Camera Z').onChange(updateCam);
+
+    const tfFolder = gfx.addFolder('Biến đổi vật');
+    const scaleCtrl = tfFolder.add(panelState, 'scale', 0.6, 1.6, 0.05).name('Scale').onChange((v) => {
+      setParameter(keyFor('Scale'), v);
+      syncActiveScene();
+    });
+    const rotXCtrl = tfFolder.add(panelState, 'rotX', -180, 180, 1).name('Xoay X (°)').onChange((v) => {
+      setParameter(keyFor('RotX'), v);
+      syncActiveScene();
+    });
+    const rotYCtrl = tfFolder.add(panelState, 'rotY', -180, 180, 1).name('Xoay Y (°)').onChange((v) => {
+      setParameter(keyFor('RotY'), v);
+      syncActiveScene();
+    });
+    const rotZCtrl = tfFolder.add(panelState, 'rotZ', -180, 180, 1).name('Xoay Z (°)').onChange((v) => {
+      setParameter(keyFor('RotZ'), v);
+      syncActiveScene();
+    });
+    tfFolder
+      .add({ reset: () => _focusPhysicsCamera(view, controls) }, 'reset')
+      .name('Reset Camera');
+
+    // ── Chiếu sáng ─────────────────────────────────────────────────────
+    const lightFolder = gfx.addFolder('Chiếu sáng');
+    const lp = {
+      ambient:        lights.ambient.intensity,
+      directional:    lights.directional.intensity,
+      pointEnabled:   lights.pointLight.visible,
+      pointIntensity: lights.pointLight.intensity,
+      shadows:        true,
+    };
+    lightFolder.add(lp, 'ambient',        0, 2, 0.05).name('Ambient').onChange((v) => { lights.ambient.intensity = v; });
+    lightFolder.add(lp, 'directional',    0, 2, 0.05).name('Directional').onChange((v) => { lights.directional.intensity = v; });
+    lightFolder.add(lp, 'pointEnabled').name('Point Light').onChange((v) => { lights.pointLight.visible = v; });
+    lightFolder.add(lp, 'pointIntensity', 0, 3, 0.1).name('Point Intensity').onChange((v) => { lights.pointLight.intensity = v; });
+    lightFolder.add(lp, 'shadows').name('Bóng đổ (Shadows)').onChange((v) => { view.setShadows(v); });
+
+    let lastSceneId = getState().currentSceneId;
+    subscribe(() => {
+      const currentSceneId = getState().currentSceneId;
+      if (currentSceneId !== lastSceneId) {
+        lastSceneId = currentSceneId;
+        panelState.target = getState().sceneParams.graphicsTarget ?? 'object_1';
+        readCurrentGraphics();
+        shapeCtrl.updateDisplay();
+        materialCtrl.updateDisplay();
+        colorCtrl.updateDisplay();
+        wireCtrl.updateDisplay();
+        scaleCtrl.updateDisplay();
+        rotXCtrl.updateDisplay();
+        rotYCtrl.updateDisplay();
+        rotZCtrl.updateDisplay();
+      }
+      const running = isRunning();
+      if (running) {
+        shapeCtrl.disable();
+        materialCtrl.disable();
+        colorCtrl.disable();
+        wireCtrl.disable();
+        scaleCtrl.disable();
+        rotXCtrl.disable();
+        rotYCtrl.disable();
+        rotZCtrl.disable();
+      } else {
+        shapeCtrl.enable();
+        materialCtrl.enable();
+        colorCtrl.enable();
+        wireCtrl.enable();
+        scaleCtrl.enable();
+        rotXCtrl.enable();
+        rotYCtrl.enable();
+        rotZCtrl.enable();
+      }
+    });
   }
 
   updateRecordsTable() {

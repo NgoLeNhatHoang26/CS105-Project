@@ -102,6 +102,11 @@ export function resetSimObject(simObject) {
 export function syncMeshFromBody(mesh, body) {
   mesh.position.copy(body.position);
   mesh.quaternion.copy(body.quaternion);
+  const offset = mesh?.userData?.visualRotationOffset;
+  if (offset) {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(offset.x, offset.y, offset.z, 'XYZ'));
+    mesh.quaternion.multiply(q);
+  }
 }
 
 export function syncBodyFromMesh(body, mesh) {

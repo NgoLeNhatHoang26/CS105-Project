@@ -22,6 +22,12 @@ import {
   computeAppliedForceOnRamp,
   constrainBodyToRamp,
 } from './inclineHelpers.js';
+import { createVisualMesh, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+
+function parseColor(hex, fallback = 0x4a90d9) {
+  if (typeof hex !== 'string') return fallback;
+  return Number.parseInt(hex.replace('#', ''), 16) || fallback;
+}
 
 export class Scene1Incline extends BaseScene {
   constructor() {
@@ -122,7 +128,7 @@ export class Scene1Incline extends BaseScene {
       this.objects = [];
     }
 
-    const size = params.boxSize ?? 0.6;
+    const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
     const mass = params.mass;
     this.objectDims = { width: size, height: size, depth: size };
     const halfHeightAlongNormal = computeBoxHalfExtentAlongNormal(this.objectDims, this.inclineData);
@@ -140,6 +146,19 @@ export class Scene1Incline extends BaseScene {
       position: { x: spawn.x, y: spawn.y, z: spawn.z },
       color: 0x4a90d9,
     });
+    const visual = createVisualMesh({
+      shape: params.graphicsShape ?? 'box',
+      size,
+      color: parseColor(params.graphicsColor, 0x4a90d9),
+      wireframe: params.graphicsWireframe,
+      textureMap: this._deps.textureMap,
+      textureName: params.graphicsMaterial ?? 'default',
+    });
+    pair.mesh.geometry?.dispose?.();
+    pair.mesh.material?.dispose?.();
+    pair.mesh = visual.mesh;
+    pair.material = visual.material;
+
     const sim = {
       id: 'object_1',
       ...pair,
@@ -149,6 +168,7 @@ export class Scene1Incline extends BaseScene {
     };
     this.objects = [sim];
     this.meshes.push(sim.mesh);
+    applyVisualRotation(sim, params);
   }
 
   _placeObjectAtTop(simObject) {
@@ -195,17 +215,21 @@ export class Scene1Incline extends BaseScene {
     this._buildRamp(params);
     this.staticBodies.forEach((b) => this._deps.physics.addBody(b));
 
-    if (!this.objects[0]) {
-      this._buildObject(params);
-      this._deps.view.getScene().add(this.objects[0].mesh);
-      this._deps.physics.addBody(this.objects[0].body);
-      this._placeObjectAtTop(this.objects[0]);
-    } else {
-      const o = this.objects[0];
-      o.body.mass = params.mass;
-      o.body.updateMassProperties();
-      this._placeObjectAtTop(o);
+    const old = this.objects[0];
+    if (old) {
+      this._deps.view.getScene().remove(old.mesh);
+      this._deps.physics.removeBody(old.body);
+      const idx = this.meshes.indexOf(old.mesh);
+      if (idx >= 0) this.meshes.splice(idx, 1);
+      disposePair(old);
+      this.objects = [];
     }
+
+    this._buildObject(params);
+    const obj = this.objects[0];
+    this._deps.view.getScene().add(obj.mesh);
+    this._deps.physics.addBody(obj.body);
+    this._placeObjectAtTop(obj);
     this._stopped = false;
   }
 

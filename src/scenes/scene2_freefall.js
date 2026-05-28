@@ -1,8 +1,6 @@
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS } from '../constants.js';
 import {
-  createBoxPair,
-  createSpherePair,
   createStaticPlaneBody,
   saveInitialPose,
   resetSimObject,
@@ -27,6 +25,12 @@ import {
   minCenterYAtGround,
   theoreticalFreeFall,
 } from './scene2Helpers.js';
+import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+
+function parseColor(hex, fallback = 0x4a90d9) {
+  if (typeof hex !== 'string') return fallback;
+  return Number.parseInt(hex.replace('#', ''), 16) || fallback;
+}
 
 export class Scene2FreeFall extends BaseScene {
   constructor() {
@@ -68,29 +72,22 @@ export class Scene2FreeFall extends BaseScene {
       disposePair(old);
     }
 
-    const r = getObjectRadius(params);
+    const r = Math.max(0.2, 0.5 * (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1));
     const bottomH = params.initialHeight;
     const mass = params.mass;
     const pos = { x: 0, y: centerYFromBottomHeight(bottomH, r), z: 0 };
     const bodyOpts = { mass, position: pos, damping: false };
 
-    let pair;
-    if (params.shape === 'sphere') {
-      pair = createSpherePair({
-        radius: r,
-        ...bodyOpts,
-        color: 0xe94560,
-      });
-    } else {
-      const s = params.boxSize ?? 0.6;
-      pair = createBoxPair({
-        width: s,
-        height: s,
-        depth: s,
-        ...bodyOpts,
-        color: 0x4a90d9,
-      });
-    }
+    const s = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+    const pair = createExperimentPair({
+      shape: params.graphicsShape ?? params.shape ?? 'box',
+      size: s,
+      ...bodyOpts,
+      color: parseColor(params.graphicsColor, 0x4a90d9),
+      wireframe: params.graphicsWireframe,
+      textureMap: this._deps.textureMap,
+      textureName: params.graphicsMaterial ?? 'default',
+    });
 
     const sim = {
       id: 'object_1',
@@ -103,6 +100,7 @@ export class Scene2FreeFall extends BaseScene {
     };
     this.objects = [sim];
     this.meshes.push(sim.mesh);
+    applyVisualRotation(sim, params);
   }
 
   onParameterChange() {

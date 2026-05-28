@@ -1,7 +1,6 @@
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS, ARENA_HALF } from '../constants.js';
 import {
-  createSpherePair,
   createStaticBox,
   saveInitialPose,
   resetSimObject,
@@ -21,8 +20,14 @@ import {
 } from '../physics/forceManager.js';
 import { getState, setCollisionSnapshot, setPlayback } from '../state.js';
 import { getSignedVelocity } from './collisionPresets.js';
+import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
 
 const REST_VELOCITY_EPS = 0.05;
+
+function parseColor(hex, fallback) {
+  if (typeof hex !== 'string') return fallback;
+  return Number.parseInt(hex.replace('#', ''), 16) || fallback;
+}
 
 export class Scene4Collision extends BaseScene {
   constructor() {
@@ -87,7 +92,8 @@ export class Scene4Collision extends BaseScene {
     const minDist = 2 * r + 0.1;
     const d = Math.max(params.initialDistance ?? 6, minDist);
     const half = d / 2;
-    const y = r + 0.05;
+    const maxScale = Math.max(params.graphicsObject1Scale ?? 1, params.graphicsObject2Scale ?? 1);
+    const y = r * maxScale + 0.05;
     return {
       pos1: { x: -half, y, z: 0 },
       pos2: { x: half, y, z: 0 },
@@ -141,17 +147,28 @@ export class Scene4Collision extends BaseScene {
 
     const { pos1, pos2, radius, trackY } = this._spawnLayout(params);
 
-    const sphere1 = createSpherePair({
-      radius,
+    const size1 = Math.max(0.4, radius * 2 * (params.graphicsObject1Scale ?? 1));
+    const size2 = Math.max(0.4, radius * 2 * (params.graphicsObject2Scale ?? 1));
+
+    const sphere1 = createExperimentPair({
+      shape: params.graphicsObject1Shape ?? 'sphere',
+      size: size1,
       mass: params.mass1,
       position: pos1,
-      color: 0x4a90d9,
+      color: parseColor(params.graphicsObject1Color, 0x4a90d9),
+      wireframe: params.graphicsObject1Wireframe,
+      textureMap: this._deps.textureMap,
+      textureName: params.graphicsObject1Material ?? 'default',
     });
-    const sphere2 = createSpherePair({
-      radius,
+    const sphere2 = createExperimentPair({
+      shape: params.graphicsObject2Shape ?? 'sphere',
+      size: size2,
       mass: params.mass2,
       position: pos2,
-      color: 0xe94560,
+      color: parseColor(params.graphicsObject2Color, 0xe94560),
+      wireframe: params.graphicsObject2Wireframe,
+      textureMap: this._deps.textureMap,
+      textureName: params.graphicsObject2Material ?? 'default',
     });
 
     this._configureBody1D(sphere1.body);
@@ -181,6 +198,16 @@ export class Scene4Collision extends BaseScene {
     };
 
     this.objects = [o1, o2];
+    applyVisualRotation(o1, {
+      graphicsRotX: params.graphicsObject1RotX,
+      graphicsRotY: params.graphicsObject1RotY,
+      graphicsRotZ: params.graphicsObject1RotZ,
+    });
+    applyVisualRotation(o2, {
+      graphicsRotX: params.graphicsObject2RotX,
+      graphicsRotY: params.graphicsObject2RotY,
+      graphicsRotZ: params.graphicsObject2RotZ,
+    });
     const floorMesh = this.ground?.mesh;
     this.meshes = floorMesh ? [floorMesh, o1.mesh, o2.mesh] : [o1.mesh, o2.mesh];
     this._collided = false;

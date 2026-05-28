@@ -2,13 +2,14 @@ import { createScene } from '../scenes/sceneFactory.js';
 import { getState, setScene as setStateScene } from '../state.js';
 
 export class SceneManager {
-  constructor(view, physics) {
+  constructor(view, physics, textureMap = null) {
     this.view = view;
     this.physics = physics;
     this.activeScene = null;
     this.deps = {
       view,
       physics,
+      textureMap,
       onStop: null,
     };
   }
