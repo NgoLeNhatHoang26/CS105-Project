@@ -36,6 +36,7 @@ export function getSceneGuiConfig(sceneId, state) {
       { ...INCLINE_ANGLE },
       { ...INCLINE_LENGTH },
       { ...INCLINE_FRICTION },
+      { key: 'cản không khí', prop: 'airResistance', lockRunning: false },
       { key: '|F| (N)', prop: 'forceMag', min: 0, max: 100, step: 1, lockRunning: false },
       { key: 'góc F (°)', prop: 'forceAngleDeg', min: -90, max: 90, step: 1, lockRunning: false },
     ];
@@ -44,6 +45,7 @@ export function getSceneGuiConfig(sceneId, state) {
     return [
       { key: 'khối lượng (kg)', prop: 'mass', min: 0.1, max: 50, step: 0.1, lockRunning: true },
       { key: 'h — độ cao đáy (m)', prop: 'initialHeight', min: 1, max: 100, step: 0.5, lockRunning: true },
+      { key: 'cản không khí', prop: 'airResistance', lockRunning: false },
       { ...INCLINE_ANGLE, inactive: true },
       { ...INCLINE_LENGTH, inactive: true },
       { ...INCLINE_FRICTION, inactive: true },
@@ -58,6 +60,7 @@ export function getSceneGuiConfig(sceneId, state) {
       { ...INCLINE_ANGLE, inactive: true },
       { ...INCLINE_LENGTH, inactive: true },
       { ...INCLINE_FRICTION },
+      { key: 'cản không khí', prop: 'airResistance', lockRunning: false },
       { key: '|F| (N)', prop: 'forceMag', min: 0, max: 100, step: 1, lockRunning: false },
       { key: 'góc F (°)', prop: 'forceAngleDeg', min: 0, max: 360, step: 1, lockRunning: false },
     ];
@@ -101,6 +104,7 @@ export function getSceneGuiConfig(sceneId, state) {
       },
       { key: 'hệ số phục hồi e', prop: 'restitution', min: 0, max: 1, step: 0.05, lockRunning: true, lockScene4: true },
       { ...INCLINE_FRICTION, lockScene4: true },
+      { key: 'cản không khí', prop: 'airResistance', lockRunning: true, lockScene4: true },
       { key: 'pause sau va', prop: 'pauseOnCollision', lockRunning: true, lockScene4: true },
       { key: 'trọng lực g', prop: 'gravityEnabled', lockRunning: true, lockScene4: true },
     ];

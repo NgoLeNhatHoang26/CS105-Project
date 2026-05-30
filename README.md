@@ -123,9 +123,11 @@ File: `src/graphics/proceduralTextures.js`, `src/visualization/gridHelper.js`
 
 ---
 
-### 7. Load model từ file
+### 7. Load model từ file (GLB/GLTF)
 
-Project tập trung vào **primitive geometry** và **physics simulation**. Model loader (GLTFLoader) không được thêm để tránh dependency phức tạp và giảm rủi ro ảnh hưởng logic vật lý. Teapot được thay bằng `LatheGeometry` với profile ấm trà (xem `graphicsShowcase.js`).
+- **GLTFLoader** (`src/graphics/modelLoader.js`) — chọn file hoặc dùng `/models/sample.glb` trong `public/models/`.
+- Model chỉ thay **lớp hiển thị**; collider Cannon (box/sphere/cylinder proxy) **giữ nguyên** để physics ổn định.
+- **GUI:** *Thuộc tính → Load model (GLB/GLTF)*.
 
 ---
 
@@ -161,7 +163,8 @@ Animation loop cố định `dt = 1/60 s` để đảm bảo tính toán vật l
 | **Reset View** | Camera mặc định |
 | Chuột trái + kéo | Orbit camera |
 | Scroll | Zoom |
-| Click chuột trái (STOPPED/PAUSED) | Chọn vật |
+| Click + kéo (STOPPED/PAUSED) | Chọn và **kéo vật** đổi vị trí ban đầu |
+| Kéo nền trống | Xoay camera (Orbit) |
 
 ### Trạng thái RUNNING
 
@@ -173,8 +176,10 @@ Animation loop cố định `dt = 1/60 s` để đảm bảo tính toán vật l
 ```
 src/
 ├── graphics/
-│   ├── proceduralTextures.js   ← Texture generators (checker, wood, metal, brick, marble)
-│   └── graphicsShowcase.js     ← Primitive shapes demo + Affine transform target
+│   ├── proceduralTextures.js   ← Texture generators
+│   ├── experimentObjectFactory.js ← Primitives + wheel + teapot lathe
+│   ├── modelLoader.js          ← GLTF/GLB load + fit scale
+│   └── applySceneModels.js     ← Gắn model lên vật thí nghiệm
 ├── components/
 │   ├── lights.js               ← Ambient + Directional + Point light
 │   └── materials.js

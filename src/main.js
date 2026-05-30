@@ -8,7 +8,8 @@ import { initStats } from './ui/stats.js';
 import { DebugVisualizer } from './visualization/debugHelpers.js';
 import { ForceVisualizer } from './visualization/vectorHelpers.js';
 import { buildTextureMap } from './graphics/proceduralTextures.js';
-import { syncMeshFromBody } from './components/geometries.js';
+import { syncSimObjectFromBody } from './components/geometries.js';
+import { applySceneLoadedModels } from './graphics/applySceneModels.js';
 import {
   getState,
   setPlayback,
@@ -46,6 +47,8 @@ const raycaster = new RaycasterController(
   view.getCamera(),
   canvas,
   () => sceneManager.getSelectableMeshes(),
+  () => sceneManager.getActiveScene(),
+  controls,
 );
 
 function applyCameraFromState() {
@@ -58,10 +61,17 @@ function loadScene(sceneId) {
   sceneManager.loadScene(sceneId);
   const active = sceneManager.getActiveScene();
   raycaster.bindSimObjects(active?.objects ?? []);
-  debugViz.trackMeshes(active?.objects?.map((o) => o.mesh) ?? []);
+  trackDebugMeshes(active);
   ui.bindScene(sceneId);
   applyCameraFromState();
-  view.setBackground(sceneId === 2 ? 0x87ceeb : sceneId === 4 ? 0x2d3436 : 0xb0c4de);
+  view.setSpaceTheme(sceneId);
+  applySceneLoadedModels(active, view).catch((err) => console.warn('applySceneLoadedModels:', err));
+}
+
+function trackDebugMeshes(active) {
+  const meshes =
+    active?.objects?.flatMap((o) => [o.mesh, o.loadedVisual].filter(Boolean)) ?? [];
+  debugViz.trackMeshes(meshes);
 }
 
 const ui = new UIManager({
@@ -71,7 +81,7 @@ const ui = new UIManager({
     sceneManager.onParameterChange();
     const active = sceneManager.getActiveScene();
     raycaster.bindSimObjects(active?.objects ?? []);
-    debugViz.trackMeshes(active?.objects?.map((o) => o.mesh) ?? []);
+    trackDebugMeshes(active);
   },
 });
 
@@ -139,16 +149,12 @@ bindKeyboard({
 
 subscribe(() => {
   debugViz.setEnabled(getState().display.debugMode);
+  ui.applyDataPanelVisibility();
 });
 
 function syncMeshes() {
   const objects = sceneManager.getActiveScene()?.objects ?? [];
-  objects.forEach((o) => {
-    if (o.mesh && o.body) {
-      o.mesh.position.copy(o.body.position);
-      o.mesh.quaternion.copy(o.body.quaternion);
-    }
-  });
+  objects.forEach((o) => syncSimObjectFromBody(o));
 }
 
 function loop(now) {
@@ -187,4 +193,5 @@ function loop(now) {
 }
 
 loadScene(getState().currentSceneId);
+ui.applyDataPanelVisibility();
 requestAnimationFrame(loop);

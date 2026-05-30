@@ -5,7 +5,7 @@ import {
   saveInitialPose,
   resetSimObject,
   syncMeshFromBody,
-  disposePair,
+  disposeSimObject,
 } from '../components/geometries.js';
 import { createTexturedPlane, disposeGridMesh } from '../visualization/gridHelper.js';
 import { degToRad, vecLength } from '../utils/helpers.js';
@@ -15,7 +15,7 @@ import {
   positionFromBody,
   velocityFromBody,
 } from '../physics/calculator.js';
-import { applyForceVector, clearForces } from '../physics/forceManager.js';
+import { applyForceVector, clearForces, applyAirDrag, computeAirDragMagnitude } from '../physics/forceManager.js';
 import { getState } from '../state.js';
 import {
   GROUND_EPS,
@@ -44,8 +44,6 @@ export class Scene2FreeFall extends BaseScene {
     const scene = view.getScene();
     const params = getState().sceneParams;
 
-    view.setBackground(0x87ceeb);
-
     const floor = createTexturedPlane(40, 40, 20, 20);
     floor.mesh.position.y = 0;
     scene.add(floor.mesh);
@@ -69,7 +67,7 @@ export class Scene2FreeFall extends BaseScene {
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
       this._deps.physics.removeBody(old.body);
-      disposePair(old);
+      disposeSimObject(old);
     }
 
     const r = Math.max(0.2, 0.5 * (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1));
@@ -110,7 +108,7 @@ export class Scene2FreeFall extends BaseScene {
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
       this._deps.physics.removeBody(old.body);
-      disposePair(old);
+      disposeSimObject(old);
     }
     this._buildObject(params);
     const scene = this._deps.view.getScene();
@@ -133,6 +131,11 @@ export class Scene2FreeFall extends BaseScene {
     const fy = mag * Math.sin(vRad);
     const fz = mag * Math.cos(vRad) * Math.sin(hRad);
     applyForceVector(obj.body, { x: fx, y: fy, z: fz });
+    if (params.airResistance) {
+      const shape = params.graphicsShape ?? 'box';
+      const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+      applyAirDrag(obj.body, shape, size);
+    }
   }
 
   update() {
@@ -169,15 +172,23 @@ export class Scene2FreeFall extends BaseScene {
       z: params.forceMag * Math.cos(vRad) * Math.sin(hRad),
     };
     const gravityVec = { x: 0, y: -params.mass * g, z: 0 };
+    const shape = params.graphicsShape ?? 'box';
+    const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+    const dragMag = params.airResistance ? computeAirDragMagnitude(obj.body, shape, size) : 0;
+    const speed = vecLength(vel.x, vel.y, vel.z);
+    const dragVec = (dragMag > 0 && speed > 1e-4)
+      ? { x: -dragMag * vel.x / speed, y: -dragMag * vel.y / speed, z: -dragMag * vel.z / speed }
+      : { x: 0, y: 0, z: 0 };
     const netVec = {
-      x: appliedVec.x + gravityVec.x,
-      y: appliedVec.y + gravityVec.y,
-      z: appliedVec.z + gravityVec.z,
+      x: appliedVec.x + gravityVec.x + dragVec.x,
+      y: appliedVec.y + gravityVec.y + dragVec.y,
+      z: appliedVec.z + gravityVec.z + dragVec.z,
     };
     const forces = freeFallForces(params.mass, g, appliedVec, netVec);
+    forces.drag = dragMag;
     const heightBottom = bottomYFromCenterY(pos.y, r);
     const nearGround = heightBottom <= GROUND_EPS + 0.05;
-    const pureFreeFall = params.forceMag === 0;
+    const pureFreeFall = params.forceMag === 0 && !params.airResistance;
     const t = s.simulationTime;
     const theory = pureFreeFall ? theoreticalFreeFall(g, t, releaseH) : null;
 
@@ -206,6 +217,7 @@ export class Scene2FreeFall extends BaseScene {
         gravity: gravityVec,
         normal: nearGround ? { x: 0, y: params.mass * g, z: 0 } : null,
         friction: null,
+        drag: dragMag > 0 ? dragVec : null,
         net: netVec,
       },
       sceneSpecific: {
@@ -218,6 +230,11 @@ export class Scene2FreeFall extends BaseScene {
         theoretical: theory,
       },
     };
+  }
+
+  getDragPlane(sim) {
+    const y = sim.body?.position?.y ?? sim.mesh?.position?.y ?? 1;
+    return new THREE.Plane(new THREE.Vector3(0, 1, 0), -y);
   }
 
   dispose() {

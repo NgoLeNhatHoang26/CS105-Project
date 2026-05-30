@@ -5,7 +5,7 @@ import {
   saveInitialPose,
   resetSimObject,
   syncMeshFromBody,
-  disposePair,
+  disposeSimObject,
 } from '../components/geometries.js';
 import { createTexturedPlane, disposeGridMesh } from '../visualization/gridHelper.js';
 import {
@@ -17,6 +17,8 @@ import {
 import {
   applyHorizontalFriction,
   clearForces,
+  applyAirDrag,
+  computeAirDragMagnitude,
 } from '../physics/forceManager.js';
 import { getState, setCollisionSnapshot, setPlayback } from '../state.js';
 import { getSignedVelocity } from './collisionPresets.js';
@@ -43,8 +45,6 @@ export class Scene4Collision extends BaseScene {
     const { view, physics } = deps;
     const scene = view.getScene();
     const params = getState().sceneParams;
-
-    view.setBackground(0x2d3436);
 
     const floor = createTexturedPlane(ARENA_HALF * 2, ARENA_HALF * 2, 12, 12, 0xcccccc);
     floor.mesh.position.y = 0;
@@ -77,7 +77,7 @@ export class Scene4Collision extends BaseScene {
   }
 
   _frictionGravity() {
-    return getState().global.gravity;
+    return this._effectiveGravity();
   }
 
   _applyPhysicsMaterials(params) {
@@ -142,7 +142,7 @@ export class Scene4Collision extends BaseScene {
     this.objects.forEach((o) => {
       this._deps?.view?.getScene()?.remove(o.mesh);
       this._deps?.physics?.removeBody(o.body);
-      disposePair(o);
+      disposeSimObject(o);
     });
 
     const { pos1, pos2, radius, trackY } = this._spawnLayout(params);
@@ -159,6 +159,7 @@ export class Scene4Collision extends BaseScene {
       wireframe: params.graphicsObject1Wireframe,
       textureMap: this._deps.textureMap,
       textureName: params.graphicsObject1Material ?? 'default',
+      damping: false,
     });
     const sphere2 = createExperimentPair({
       shape: params.graphicsObject2Shape ?? 'sphere',
@@ -169,6 +170,7 @@ export class Scene4Collision extends BaseScene {
       wireframe: params.graphicsObject2Wireframe,
       textureMap: this._deps.textureMap,
       textureName: params.graphicsObject2Material ?? 'default',
+      damping: false,
     });
 
     this._configureBody1D(sphere1.body);
@@ -220,11 +222,22 @@ export class Scene4Collision extends BaseScene {
     const params = getState().sceneParams;
     const mu = params.friction ?? 0;
     const g = this._frictionGravity();
+    const r = params.sphereRadius ?? 0.45;
 
-    this.objects.forEach((o) => {
+    this.objects.forEach((o, i) => {
       clearForces(o.body);
       if (mu > 0) {
         applyHorizontalFriction(o.body, o.mass, g, mu, { x: 0, y: 0, z: 0 });
+      }
+      if (params.airResistance) {
+        const shape = i === 0
+          ? (params.graphicsObject1Shape ?? 'sphere')
+          : (params.graphicsObject2Shape ?? 'sphere');
+        const scale = i === 0
+          ? (params.graphicsObject1Scale ?? 1)
+          : (params.graphicsObject2Scale ?? 1);
+        const size = Math.max(0.4, Math.min(1.6, r * 2 * scale));
+        applyAirDrag(o.body, shape, size);
       }
     });
   }
@@ -292,7 +305,7 @@ export class Scene4Collision extends BaseScene {
     this.objects.forEach((o) => {
       this._deps.view.getScene().remove(o.mesh);
       this._deps.physics.removeBody(o.body);
-      disposePair(o);
+      disposeSimObject(o);
     });
     this._buildObjects(params);
     const scene = this._deps.view.getScene();
@@ -376,6 +389,12 @@ export class Scene4Collision extends BaseScene {
     const mu = params.friction ?? 0;
     const g = this._frictionGravity();
     const frictionMag = mu * m1 * g;
+    const activeFriction = Math.abs(v1.x) > 0.01 ? frictionMag : 0;
+    const r = params.sphereRadius ?? 0.45;
+    const size1 = Math.max(0.4, Math.min(1.6, r * 2 * (params.graphicsObject1Scale ?? 1)));
+    const dragMag1 = params.airResistance
+      ? computeAirDragMagnitude(o1.body, params.graphicsObject1Shape ?? 'sphere', size1)
+      : 0;
 
     return {
       time: s.simulationTime,
@@ -389,8 +408,9 @@ export class Scene4Collision extends BaseScene {
         applied: 0,
         gravity: params.gravityEnabled ? m1 * g : 0,
         normal: params.gravityEnabled ? m1 * g : 0,
-        friction: Math.abs(v1.x) > 0.01 ? frictionMag : 0,
-        net: 0,
+        friction: activeFriction,
+        drag: dragMag1,
+        net: activeFriction + dragMag1,
       },
       forceVectors: {
         applied: null,

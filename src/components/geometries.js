@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createPhongMaterial } from './materials.js';
+import { syncLoadedVisualFromBody, disposeLoadedVisual } from '../graphics/modelLoader.js';
 
 /**
  * Factory mesh + Cannon body — transformation sync từ physics.
@@ -107,6 +108,18 @@ export function syncMeshFromBody(mesh, body) {
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(offset.x, offset.y, offset.z, 'XYZ'));
     mesh.quaternion.multiply(q);
   }
+}
+
+/** Đồng bộ mesh + model GLTF (nếu có). */
+export function syncSimObjectFromBody(sim) {
+  if (!sim?.mesh || !sim?.body) return;
+  syncMeshFromBody(sim.mesh, sim.body);
+  syncLoadedVisualFromBody(sim);
+}
+
+export function disposeSimObject(sim) {
+  disposeLoadedVisual(sim);
+  disposePair(sim);
 }
 
 export function syncBodyFromMesh(body, mesh) {

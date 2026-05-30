@@ -13,7 +13,9 @@ export function inclineForces(mass, g, angleDeg, mu, appliedF = 0) {
   const wParallel = weight * sinT;
   const normal = weight * cosT;
   const friction = mu * normal;
-  const net = appliedF + wParallel - friction;
+  const driveAlong = appliedF + wParallel;
+  // Net = 0 when static friction holds; positive when sliding
+  const net = driveAlong > friction ? driveAlong - friction : 0;
   return {
     gravity: weight,
     weightParallel: wParallel,

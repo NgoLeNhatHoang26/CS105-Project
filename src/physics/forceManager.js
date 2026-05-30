@@ -96,6 +96,55 @@ export function applyInclineFriction(body, inclineData, mass, g, mu, appliedForc
   applyForceVector(body, { x: fx, y: fy, z: fz });
 }
 
+// ─── Sức cản không khí ────────────────────────────────────────────────────────
+
+const AIR_DENSITY = 1.225; // kg/m³ — điều kiện chuẩn, ngang mực biển
+
+const DRAG_CD = {
+  sphere:   0.47,
+  box:      1.05,
+  cylinder: 0.82,
+  cone:     0.50,
+  wheel:    0.90,
+  teapot:   0.80,
+};
+
+function _dragArea(shape, size) {
+  switch (shape) {
+    case 'sphere':
+    case 'teapot':   return Math.PI * (0.5 * size) ** 2;
+    case 'cylinder':
+    case 'wheel':    return Math.PI * (0.45 * size) ** 2;
+    case 'cone':     return Math.PI * (0.5 * size) ** 2;
+    case 'box':
+    default:         return size * size;
+  }
+}
+
+/** Độ lớn lực cản không khí (N): F = ½ρv²CdA — chỉ tính, không áp lực. */
+export function computeAirDragMagnitude(body, shape, size) {
+  const vx = body.velocity.x;
+  const vy = body.velocity.y;
+  const vz = body.velocity.z;
+  const v2 = vx * vx + vy * vy + vz * vz;
+  if (v2 < 1e-8) return 0;
+  const Cd = DRAG_CD[shape] ?? DRAG_CD.box;
+  const A = _dragArea(shape, size);
+  return 0.5 * AIR_DENSITY * v2 * Cd * A;
+}
+
+/** Áp lực cản không khí lên body — hướng ngược vận tốc tức thời. */
+export function applyAirDrag(body, shape, size) {
+  const vx = body.velocity.x;
+  const vy = body.velocity.y;
+  const vz = body.velocity.z;
+  const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+  if (speed < 1e-4) return;
+  const dragMag = computeAirDragMagnitude(body, shape, size);
+  const s = -dragMag / speed;
+  applyForceVector(body, { x: vx * s, y: vy * s, z: vz * s });
+}
+
 /**
  * Ma sát Coulomb (μN) trên mặt phẳng ngang (mặt xz).
  * appliedForce: lực F do người dùng (thành phần ngang).

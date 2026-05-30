@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { setupSceneLights } from '../components/lights.js';
+import { createSpaceStarfield, setSpaceBackground } from '../visualization/spaceEnvironment.js';
 
 /**
  * Renderer — Perspective projection, Phong lighting, PCF soft shadows.
@@ -35,6 +36,8 @@ export class ViewRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
 
     this.lights = setupSceneLights(this.scene);
 
@@ -58,9 +61,14 @@ export class ViewRenderer {
     this.camera.updateProjectionMatrix();
   }
 
+  setSpaceTheme(sceneId) {
+    return setSpaceBackground(this.scene, sceneId);
+  }
+
   setBackground(color) {
-    this.scene.background = new THREE.Color(color);
-    if (this.scene.fog) this.scene.fog.color = this.scene.background;
+    const c = new THREE.Color(color);
+    this.scene.background = c;
+    if (this.scene.fog) this.scene.fog.color.copy(c);
   }
 
   /**

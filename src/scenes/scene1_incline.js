@@ -6,12 +6,12 @@ import {
   createBoxPair,
   saveInitialPose,
   syncMeshFromBody,
-  disposePair,
+  disposeSimObject,
 } from '../components/geometries.js';
 import { createTexturedPlane } from '../visualization/gridHelper.js';
 import { degToRad } from '../utils/helpers.js';
 import { inclineForces, kineticEnergy, positionFromBody, velocityFromBody } from '../physics/calculator.js';
-import { applyForceVector, applyInclineFriction, clearForces } from '../physics/forceManager.js';
+import { applyForceVector, applyInclineFriction, clearForces, applyAirDrag, computeAirDragMagnitude } from '../physics/forceManager.js';
 import { getState } from '../state.js';
 import {
   computeInclineData,
@@ -124,7 +124,7 @@ export class Scene1Incline extends BaseScene {
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
       this._deps.physics.removeBody(old.body);
-      disposePair(old);
+      disposeSimObject(old);
       this.objects = [];
     }
 
@@ -145,6 +145,7 @@ export class Scene1Incline extends BaseScene {
       mass,
       position: { x: spawn.x, y: spawn.y, z: spawn.z },
       color: 0x4a90d9,
+      damping: false,
     });
     const visual = createVisualMesh({
       shape: params.graphicsShape ?? 'box',
@@ -221,7 +222,7 @@ export class Scene1Incline extends BaseScene {
       this._deps.physics.removeBody(old.body);
       const idx = this.meshes.indexOf(old.mesh);
       if (idx >= 0) this.meshes.splice(idx, 1);
-      disposePair(old);
+      disposeSimObject(old);
       this.objects = [];
     }
 
@@ -246,6 +247,11 @@ export class Scene1Incline extends BaseScene {
     );
     applyForceVector(obj.body, applied);
     applyInclineFriction(obj.body, this.inclineData, params.mass, g, params.friction, applied);
+    if (params.airResistance) {
+      const shape = params.graphicsShape ?? 'box';
+      const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+      applyAirDrag(obj.body, shape, size);
+    }
   }
 
   update() {
@@ -291,6 +297,12 @@ export class Scene1Incline extends BaseScene {
     const sAlong = distanceAlongRamp(new THREE.Vector3(pos.x, pos.y, pos.z), this.inclineData);
     const forceAlongRamp = params.forceMag * Math.cos(degToRad(params.forceAngleDeg));
     const forces = inclineForces(params.mass, g, params.angleDeg, params.friction, forceAlongRamp);
+    const shape = params.graphicsShape ?? 'box';
+    const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+    const dragMag = params.airResistance ? computeAirDragMagnitude(obj.body, shape, size) : 0;
+    forces.drag = dragMag;
+    forces.net = Math.max(0, forces.net - dragMag);
+    forces.acceleration = params.mass > 0 ? forces.net / params.mass : 0;
     const forceAngle = degToRad(params.forceAngleDeg);
     const alongUnit = this.inclineData.downhillDir.clone();
     const normalUnit = this.inclineData.rampNormal.clone();
@@ -355,6 +367,13 @@ export class Scene1Incline extends BaseScene {
         friction: params.friction,
       },
     };
+  }
+
+  /** Mặt phẳng kéo trùng mặt dốc. */
+  getDragPlane(sim) {
+    const p = sim.mesh.position;
+    const n = this.inclineData.rampNormal.clone();
+    return new THREE.Plane(n, -n.dot(p));
   }
 
   dispose() {

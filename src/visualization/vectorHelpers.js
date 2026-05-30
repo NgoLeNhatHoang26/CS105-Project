@@ -7,6 +7,7 @@ const COLORS = {
   gravity: 0x3366ff,
   normal: 0xffd60a,
   friction: 0xffaa00,
+  drag: 0x00ccaa,
   net: 0xffffff,
 };
 
@@ -111,6 +112,7 @@ export class ForceVisualizer {
     maybeDraw('gravity');
     maybeDraw('normal');
     maybeDraw('friction');
+    maybeDraw('drag');
     maybeDraw('net');
     this._hideUnused(visible);
   }

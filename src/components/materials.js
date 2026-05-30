@@ -13,9 +13,24 @@ export function createPhongMaterial(color, options = {}) {
   });
 }
 
-export function setHighlight(material, on, hex = 0x444400) {
-  if (!material || !material.emissive) return;
-  material.emissive.setHex(on ? hex : 0x000000);
+function setHighlightMaterial(material, on, hex = 0x444400) {
+  if (!material) return;
+  const mats = Array.isArray(material) ? material : [material];
+  mats.forEach((m) => {
+    if (m?.emissive) m.emissive.setHex(on ? hex : 0x000000);
+  });
+}
+
+/** Mesh, Group hoặc Material — highlight khi chọn vật. */
+export function setHighlight(target, on, hex = 0x444400) {
+  if (!target) return;
+  if (target.isMesh || target.isGroup) {
+    target.traverse((c) => {
+      if (c.isMesh) setHighlightMaterial(c.material, on, hex);
+    });
+    return;
+  }
+  setHighlightMaterial(target, on, hex);
 }
 
 export function disposeMaterial(material) {

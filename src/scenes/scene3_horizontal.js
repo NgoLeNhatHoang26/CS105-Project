@@ -5,7 +5,7 @@ import {
   saveInitialPose,
   resetSimObject,
   syncMeshFromBody,
-  disposePair,
+  disposeSimObject,
 } from '../components/geometries.js';
 import { createTexturedPlane, disposeGridMesh } from '../visualization/gridHelper.js';
 import { degToRad, vecLength } from '../utils/helpers.js';
@@ -20,6 +20,8 @@ import {
   applyHorizontalFriction,
   clearForces,
   forceFromAngles,
+  applyAirDrag,
+  computeAirDragMagnitude,
 } from '../physics/forceManager.js';
 import { getState } from '../state.js';
 import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
@@ -39,8 +41,6 @@ export class Scene3Horizontal extends BaseScene {
     super.init(deps);
     const { view, physics } = deps;
     const scene = view.getScene();
-    view.setBackground(0xb0c4de);
-
     const floor = createTexturedPlane(ARENA_HALF * 2, ARENA_HALF * 2, 16, 16);
     floor.mesh.position.y = 0;
     scene.add(floor.mesh);
@@ -108,7 +108,7 @@ export class Scene3Horizontal extends BaseScene {
       this._deps.physics.removeBody(old.body);
       const idx = this.meshes.indexOf(old.mesh);
       if (idx >= 0) this.meshes.splice(idx, 1);
-      disposePair(old);
+      disposeSimObject(old);
     }
     const mass = params.mass;
     const pos = { x: 0, y: this._objectSpawnY(params), z: 0 };
@@ -121,6 +121,7 @@ export class Scene3Horizontal extends BaseScene {
       wireframe: params.graphicsWireframe,
       textureMap: this._deps.textureMap,
       textureName: params.graphicsMaterial ?? 'default',
+      damping: false,
     });
     const sim = {
       id: 'object_1',
@@ -146,7 +147,7 @@ export class Scene3Horizontal extends BaseScene {
       this._deps.physics.removeBody(old.body);
       const idx = this.meshes.indexOf(old.mesh);
       if (idx >= 0) this.meshes.splice(idx, 1);
-      disposePair(old);
+      disposeSimObject(old);
     }
 
     this._buildObject(params);
@@ -168,6 +169,11 @@ export class Scene3Horizontal extends BaseScene {
     const applied = forceFromAngles(params.forceMag, params.forceAngleDeg, 'xz');
     applyForceVector(obj.body, applied);
     applyHorizontalFriction(obj.body, params.mass, g, params.friction, applied);
+    if (params.airResistance) {
+      const shape = params.graphicsShape ?? 'box';
+      const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+      applyAirDrag(obj.body, shape, size);
+    }
   }
 
   update() {
@@ -235,10 +241,19 @@ export class Scene3Horizontal extends BaseScene {
         };
       }
     }
+    const shape = params.graphicsShape ?? 'box';
+    const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+    const dragMag = params.airResistance ? computeAirDragMagnitude(obj.body, shape, size) : 0;
+    const dragVec = (dragMag > 0 && horizontalSpeed > 1e-4)
+      ? { x: -dragMag * vel.x / horizontalSpeed, y: 0, z: -dragMag * vel.z / horizontalSpeed }
+      : { x: 0, y: 0, z: 0 };
+    forces.drag = dragMag;
+    forces.net = Math.max(0, forces.net - dragMag);
+
     const netVec = {
-      x: appliedVec.x + gravityVec.x + normalVec.x + frictionVec.x,
+      x: appliedVec.x + gravityVec.x + normalVec.x + frictionVec.x + dragVec.x,
       y: appliedVec.y + gravityVec.y + normalVec.y + frictionVec.y,
-      z: appliedVec.z + gravityVec.z + normalVec.z + frictionVec.z,
+      z: appliedVec.z + gravityVec.z + normalVec.z + frictionVec.z + dragVec.z,
     };
 
     return {
@@ -249,9 +264,9 @@ export class Scene3Horizontal extends BaseScene {
       velocity: vel,
       speed,
       acceleration: {
-        x: forces.acceleration * (vel.x >= 0 ? 1 : -1),
+        x: params.mass > 0 ? netVec.x / params.mass : 0,
         y: 0,
-        z: 0,
+        z: params.mass > 0 ? netVec.z / params.mass : 0,
       },
       kineticEnergy: kineticEnergy(params.mass, vel.x, vel.y, vel.z),
       forces,
@@ -260,6 +275,7 @@ export class Scene3Horizontal extends BaseScene {
         gravity: gravityVec,
         normal: normalVec,
         friction: frictionVec,
+        drag: dragMag > 0 ? dragVec : null,
         net: netVec,
       },
       sceneSpecific: { friction: params.friction, positionXZ: `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` },

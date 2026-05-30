@@ -10,6 +10,7 @@ import { SCENE_NAMES, SPEED_OPTIONS, SCENE_IDS } from '../constants.js';
 import { getSceneGuiConfig } from './panels.js';
 import { formatNum } from '../utils/helpers.js';
 import { applyCollisionPresetToParams } from '../scenes/collisionPresets.js';
+import { revokeModelUrl } from '../graphics/applySceneModels.js';
 
 /** Per-scene formula definitions (display only, no physics logic). */
 const SCENE_FORMULAS = {
@@ -214,10 +215,21 @@ export class UIManager {
     const disp = this.gui.addFolder('Hiển thị');
     const d = getState().display;
     disp.add(d, 'showVectors', ['none', 'selected', 'all']).name('Vector lực').onChange((v) => setDisplay('showVectors', v));
-    disp.add(d, 'debugMode').name('Debug').onChange((v) => setDisplay('debugMode', v));
+    disp.add(d, 'showDataPanel').name('Panel dữ liệu').onChange((v) => {
+      setDisplay('showDataPanel', v);
+      this.applyDataPanelVisibility();
+    });
+    disp.add(d, 'debugMode').name('Debug (wireframe + bbox)').onChange((v) => setDisplay('debugMode', v));
 
     camFolder.close();
     document.body.dataset.simState = getState().playback;
+    this.applyDataPanelVisibility();
+  }
+
+  applyDataPanelVisibility() {
+    const show = getState().display.showDataPanel;
+    const section = document.getElementById('section-data');
+    if (section) section.hidden = !show;
   }
 
   bindScene(sceneId) {
@@ -246,7 +258,7 @@ export class UIManager {
         });
         this.controllers.push({ ctrl: c, ...item });
         if (item.inactive) c.disable();
-      } else if (item.prop === 'pauseOnCollision' || item.prop === 'gravityEnabled') {
+      } else if (item.prop === 'pauseOnCollision' || item.prop === 'gravityEnabled' || item.prop === 'airResistance') {
         const c = this.sceneFolder.add(params, item.prop).name(item.key);
         c.onChange(() => this.onParamChange(item.prop));
         this.controllers.push({ ctrl: c, ...item });
@@ -312,7 +324,7 @@ export class UIManager {
         ? sceneId === 4
           ? 'RUNNING — Scene va chạm: không đổi tham số. Pause để chỉnh.'
           : 'RUNNING — Chỉ đổi lực F / camera. Kéo chuột trái để xoay camera.'
-        : 'STOPPED/PAUSED — Click trái chọn vật; kéo trái xoay camera.';
+        : 'STOPPED/PAUSED — Click chọn vật; kéo để dời vật. Kéo nền trống để xoay camera.';
     }
   }
 
@@ -348,6 +360,9 @@ export class UIManager {
       forces += dataRow('W', `${formatNum(f.gravity)} N`);
       forces += dataRow('N', `${formatNum(f.normal)} N`);
       forces += dataRow('f', `${formatNum(f.friction)} N`);
+      if (f.drag != null) {
+        forces += dataRow('F_kk', `${formatNum(f.drag)} N`);
+      }
       forces += dataRow('F_net', `${formatNum(f.net)} N`);
     }
 
@@ -464,6 +479,8 @@ export class UIManager {
           rotXCtrl.updateDisplay();
           rotYCtrl.updateDisplay();
           rotZCtrl.updateDisplay();
+          modelUi.fileName = getState().sceneParams[labelKeyFor()] || '—';
+          fileNameCtrl.updateDisplay();
         });
     }
     const shapeCtrl = shapeFolder
@@ -488,6 +505,76 @@ export class UIManager {
       setParameter(keyFor('Wireframe'), v);
       syncActiveScene();
     });
+
+    const urlKeyFor = () => {
+      if (getState().currentSceneId === SCENE_IDS.COLLISION) {
+        return panelState.target === 'object_2' ? 'graphicsObject2ModelUrl' : 'graphicsObject1ModelUrl';
+      }
+      return 'graphicsModelUrl';
+    };
+    const labelKeyFor = () => {
+      if (getState().currentSceneId === SCENE_IDS.COLLISION) {
+        return panelState.target === 'object_2' ? 'graphicsObject2ModelLabel' : 'graphicsObject1ModelLabel';
+      }
+      return 'graphicsModelLabel';
+    };
+
+    const modelFolder = gfx.addFolder('Load model (GLB/GLTF)');
+    const modelUi = {
+      fileName: getState().sceneParams[labelKeyFor()] || '—',
+      pickFile() {
+        fileInput.click();
+      },
+      clearModel() {
+        const sp = getState().sceneParams;
+        revokeModelUrl(sp[urlKeyFor()]);
+        setParameter(urlKeyFor(), null);
+        setParameter(labelKeyFor(), '');
+        modelUi.fileName = '—';
+        fileNameCtrl.updateDisplay();
+        syncActiveScene();
+      },
+      async trySample() {
+        const url = '/models/sample.glb';
+        try {
+          const res = await fetch(url, { method: 'HEAD' });
+          if (!res.ok) throw new Error('not found');
+          const sp = getState().sceneParams;
+          revokeModelUrl(sp[urlKeyFor()]);
+          setParameter(urlKeyFor(), url);
+          setParameter(labelKeyFor(), 'sample.glb');
+          modelUi.fileName = 'sample.glb';
+          fileNameCtrl.updateDisplay();
+          syncActiveScene();
+        } catch {
+          alert('Đặt file sample.glb vào thư mục public/models/ (xem README).');
+        }
+      },
+    };
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.glb,.gltf';
+    fileInput.hidden = true;
+    document.body.appendChild(fileInput);
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const sp = getState().sceneParams;
+      revokeModelUrl(sp[urlKeyFor()]);
+      const blobUrl = URL.createObjectURL(file);
+      setParameter(urlKeyFor(), blobUrl);
+      setParameter(labelKeyFor(), file.name);
+      modelUi.fileName = file.name;
+      fileNameCtrl.updateDisplay();
+      syncActiveScene();
+      fileInput.value = '';
+    });
+
+    modelFolder.add(modelUi, 'pickFile').name('Chọn file...');
+    modelFolder.add(modelUi, 'clearModel').name('Xóa model');
+    modelFolder.add(modelUi, 'trySample').name('Thử /models/sample.glb');
+    const fileNameCtrl = modelFolder.add(modelUi, 'fileName').name('Đang dùng').disable();
 
     // ── Camera ─────────────────────────────────────────────────────────────
     const camPosFolder = gfx.addFolder('Vị trí camera');

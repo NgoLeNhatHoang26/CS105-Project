@@ -1,5 +1,6 @@
 import { createScene } from '../scenes/sceneFactory.js';
 import { getState, setScene as setStateScene } from '../state.js';
+import { applySceneLoadedModels } from '../graphics/applySceneModels.js';
 
 export class SceneManager {
   constructor(view, physics, textureMap = null) {
@@ -39,7 +40,10 @@ export class SceneManager {
   }
 
   onParameterChange() {
-    this.activeScene?.onParameterChange();
+    this.activeScene?.onParameterChange?.();
+    applySceneLoadedModels(this.activeScene, this.view).catch((err) => {
+      console.warn('applySceneLoadedModels:', err);
+    });
   }
 
   getActiveScene() {

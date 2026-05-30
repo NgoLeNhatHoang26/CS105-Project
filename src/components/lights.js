@@ -9,10 +9,10 @@ import { SHADOW_MAP_SIZE } from '../constants.js';
  */
 export function setupSceneLights(scene) {
   // ── Ambient Light ──────────────────────────────────────────────────────────
-  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+  const ambient = new THREE.AmbientLight(0x9eb8ff, 0.42);
 
   // ── Directional Light (with PCFSoft shadow map) ───────────────────────────
-  const directional = new THREE.DirectionalLight(0xffffff, 0.85);
+  const directional = new THREE.DirectionalLight(0xe8f0ff, 0.78);
   directional.position.set(15, 25, 12);
   directional.castShadow = true;
   directional.shadow.mapSize.width  = SHADOW_MAP_SIZE;
@@ -29,7 +29,7 @@ export function setupSceneLights(scene) {
   // ── Point Light (ánh sáng điểm) ───────────────────────────────────────────
   // Warm fill light positioned above the center of the scene.
   // castShadow = false for performance; the directional light handles shadows.
-  const pointLight = new THREE.PointLight(0xffa060, 0.55, 35, 1.2);
+  const pointLight = new THREE.PointLight(0x7c5cff, 0.48, 40, 1.4);
   pointLight.position.set(4, 10, 6);
 
   scene.add(ambient, directional, pointLight);

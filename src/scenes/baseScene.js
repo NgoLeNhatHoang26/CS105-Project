@@ -1,3 +1,5 @@
+import { disposeLoadedVisual } from '../graphics/modelLoader.js';
+
 /**
  * Contract cơ sở cho mỗi scene vật lý.
  */
@@ -19,7 +21,13 @@ export class BaseScene {
   }
 
   getSelectableMeshes() {
-    return this.objects.filter((o) => o.selectable !== false).map((o) => o.mesh);
+    const list = [];
+    this.objects.forEach((o) => {
+      if (o.selectable === false) return;
+      if (o.mesh) list.push(o.mesh);
+      if (o.loadedVisual) list.push(o.loadedVisual);
+    });
+    return list;
   }
 
   reset() {
@@ -45,6 +53,10 @@ export class BaseScene {
     this.meshes.forEach((m) => scene?.remove(m));
     this.groups.forEach((g) => scene?.remove(g));
     this.objects.forEach((o) => {
+      if (o.loadedVisual) {
+        scene?.remove(o.loadedVisual);
+        disposeLoadedVisual(o);
+      }
       if (o.dispose) o.dispose();
       else if (o.mesh) scene?.remove(o.mesh);
       if (o.body) physics?.removeBody(o.body);
