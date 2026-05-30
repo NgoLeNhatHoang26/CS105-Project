@@ -149,6 +149,7 @@ export const DEFAULT_DISPLAY = {
   showDataPanel: true,
   showVectors: 'none',
   debugMode: false,
+  transformMode: 'translate',
 };
 
 export const SPEED_OPTIONS = [0.5, 1, 2, 4];

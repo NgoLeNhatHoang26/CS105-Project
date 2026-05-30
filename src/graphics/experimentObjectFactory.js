@@ -70,6 +70,17 @@ function buildVisual(shape, size, material) {
       return buildWheelMesh(size, material);
     case 'teapot':
       return buildTeapotLikeMesh(size, material);
+    case 'icosahedron':
+      return new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 * size, 1), material);
+    case 'prism': {
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5 * size, 0.5 * size, size, 3),
+        material,
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
     case 'box':
     default:
       return new THREE.Mesh(new THREE.BoxGeometry(size, size, size), material);
@@ -98,13 +109,15 @@ function buildCollider(shape, size) {
   switch (shape) {
     case 'sphere':
     case 'teapot':
-      return new CANNON.Sphere(0.5 * size);
+    case 'icosahedron':
+      return new CANNON.Sphere(0.55 * size);
     case 'cylinder':
     case 'wheel':
       return new CANNON.Cylinder(0.45 * size, 0.45 * size, size, 20);
     case 'cone':
-      // cannon-es has no cone primitive; use simple cylinder proxy.
       return new CANNON.Cylinder(0.5 * size, 0.15 * size, size, 20);
+    case 'prism':
+      return new CANNON.Cylinder(0.5 * size, 0.5 * size, size, 3);
     case 'box':
     default:
       return new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2));

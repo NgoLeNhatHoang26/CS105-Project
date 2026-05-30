@@ -13,6 +13,7 @@ import { applySceneLoadedModels } from './graphics/applySceneModels.js';
 import {
   getState,
   setPlayback,
+  setDisplay,
   isRunning,
   advanceSimulationTime,
   addRecordedPoint,
@@ -121,6 +122,14 @@ document.getElementById('btn-reset-view')?.addEventListener('click', () => {
   resetCameraView(view.getCamera(), controls, c.position, c.target);
 });
 
+const _setTransformMode = (mode) => {
+  setDisplay('transformMode', mode);
+  document.getElementById('btn-mode-translate')?.classList.toggle('active', mode === 'translate');
+  document.getElementById('btn-mode-rotate')?.classList.toggle('active', mode === 'rotate');
+};
+document.getElementById('btn-mode-translate')?.addEventListener('click', () => _setTransformMode('translate'));
+document.getElementById('btn-mode-rotate')?.addEventListener('click', () => _setTransformMode('rotate'));
+
 document.getElementById('btn-record')?.addEventListener('click', () => {
   const raw = sceneManager.getTelemetry();
   const sceneStopped = sceneManager.getActiveScene()?.isStopped?.() ?? false;
@@ -150,6 +159,7 @@ bindKeyboard({
 subscribe(() => {
   debugViz.setEnabled(getState().display.debugMode);
   ui.applyDataPanelVisibility();
+  ui.setRunningLocks();
 });
 
 function syncMeshes() {

@@ -181,6 +181,24 @@ html, body, #app {
   gap: var(--space-xs);
 }
 
+.transform-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.btn-mode {
+  color: var(--text-dim);
+}
+
+.btn-mode.active {
+  background: rgba(110, 231, 255, 0.1);
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  box-shadow: 0 0 10px rgba(110, 231, 255, 0.15);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

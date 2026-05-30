@@ -53,6 +53,16 @@
               <span class="btn-label">View</span>
             </button>
           </div>
+          <div id="transform-bar" class="transform-bar" role="toolbar" aria-label="Chế độ biến đổi">
+            <button type="button" id="btn-mode-translate" class="btn btn-mode active" title="Chế độ dời vật (mặc định)">
+              <span class="btn-icon" aria-hidden="true">✥</span>
+              <span class="btn-label">Di chuyển</span>
+            </button>
+            <button type="button" id="btn-mode-rotate" class="btn btn-mode" title="Xoay vật · kéo chuột · [ ] bàn phím">
+              <span class="btn-icon" aria-hidden="true">↻</span>
+              <span class="btn-label">Xoay</span>
+            </button>
+          </div>
           <p id="drag-hint" class="status-hint">STOPPED/PAUSED: click chọn vật, kéo để dời vật; kéo nền trống để xoay camera.</p>
         </section>
 
@@ -134,7 +144,13 @@
                   <kbd>R</kbd><span>Reset</span>
                 </div>
                 <div class="shortcut-row">
-                  <kbd>Drag</kbd><span>Xoay camera</span>
+                  <kbd>[</kbd><kbd>]</kbd><span>Xoay vật trục Y (chọn vật trước)</span>
+                </div>
+                <div class="shortcut-row">
+                  <kbd>'</kbd><kbd>\</kbd><span>Xoay vật trục X</span>
+                </div>
+                <div class="shortcut-row">
+                  <kbd>Drag</kbd><span>Xoay camera (hoặc xoay vật nếu chế độ Xoay)</span>
                 </div>
               </div>
             </div>

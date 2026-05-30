@@ -320,11 +320,14 @@ export class UIManager {
 
     const hint = document.getElementById('drag-hint');
     if (hint) {
+      const mode = getState().display.transformMode ?? 'translate';
       hint.textContent = running
         ? sceneId === 4
           ? 'RUNNING — Scene va chạm: không đổi tham số. Pause để chỉnh.'
           : 'RUNNING — Chỉ đổi lực F / camera. Kéo chuột trái để xoay camera.'
-        : 'STOPPED/PAUSED — Click chọn vật; kéo để dời vật. Kéo nền trống để xoay camera.';
+        : mode === 'rotate'
+          ? 'CHẾ ĐỘ XOAY — Kéo chuột: xoay vật · [ ] xoay trục Y · \' \\ xoay trục X. Kéo nền trống: xoay camera.'
+          : 'CHẾ ĐỘ DI CHUYỂN — Click chọn vật; kéo để dời vật. Kéo nền trống: xoay camera.';
     }
   }
 
@@ -422,7 +425,7 @@ export class UIManager {
   buildGraphicsPanel({ lights, view, controls, sceneManager }) {
     const gfx = this.gui.addFolder('Thuộc tính');
     gfx.close();
-    const graphicShapes = ['box', 'sphere', 'cone', 'cylinder', 'wheel', 'teapot'];
+    const graphicShapes = ['box', 'sphere', 'cone', 'cylinder', 'wheel', 'teapot', 'icosahedron', 'prism'];
     const graphicMaterials = ['default', 'checker', 'wood', 'metal', 'brick', 'marble'];
 
     const params = getState().sceneParams;
