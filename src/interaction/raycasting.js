@@ -1,18 +1,13 @@
 import * as THREE from 'three';
 import { canDragObjects, isRunning, setParameter, getState } from '../state.js';
 import { setHighlight } from '../components/materials.js';
-import { syncBodyFromMesh, saveInitialPose } from '../components/geometries.js';
-import { syncLoadedVisualFromBody } from '../graphics/modelLoader.js';
 import {
   defaultDragPlane,
   constrainDragPosition,
   syncFreeFallHeightAfterDrag,
 } from './dragConstraints.js';
-import {
-  computeBoxHalfExtentAlongNormal,
-  constrainBodyToRamp,
-  getRampFrameQuaternion,
-} from '../scenes/inclineHelpers.js';
+import { getRampFrameQuaternion } from '../scenes/inclineHelpers.js';
+import { saveInitialPoseKinematic } from '../components/simSync.js';
 import { SCENE_IDS } from '../constants.js';
 
 /**
@@ -108,21 +103,16 @@ export class RaycasterController {
     if (!constrained) return;
 
     sim.mesh.position.copy(constrained);
+    sim.simState.position.x = constrained.x;
+    sim.simState.position.y = constrained.y;
+    sim.simState.position.z = constrained.z;
+    sim.simState.velocity.x = 0;
+    sim.simState.velocity.y = 0;
+    sim.simState.velocity.z = 0;
 
     if (sceneId === SCENE_IDS.INCLINE && scene?.inclineData) {
-      const halfHeight = computeBoxHalfExtentAlongNormal(
-        scene.objectDims ?? { width: 0.6, height: 0.6, depth: 0.6 },
-        scene.inclineData,
-      );
-      const rampQuat = getRampFrameQuaternion(scene.inclineData);
-      sim.mesh.quaternion.copy(rampQuat);
-      sim.body.quaternion.copy(rampQuat);
-      constrainBodyToRamp(sim.body, scene.inclineData, halfHeight);
-      sim.mesh.position.copy(sim.body.position);
+      sim.mesh.quaternion.copy(getRampFrameQuaternion(scene.inclineData));
     }
-
-    syncBodyFromMesh(sim.body, sim.mesh);
-    syncLoadedVisualFromBody(sim);
   }
 
   _onDown(event) {
@@ -195,7 +185,7 @@ export class RaycasterController {
         const h = syncFreeFallHeightAfterDrag(this.selected);
         setParameter('initialHeight', h);
       }
-      saveInitialPose(this.selected);
+      saveInitialPoseKinematic(this.selected);
     } else if (!this.pointerMoved && this.pendingSelect) {
       this._clearHighlight();
       this.selected = this.pendingSelect;
@@ -209,8 +199,7 @@ export class RaycasterController {
     this._setOrbitEnabled(true);
   }
 
-  _applyBodyRotation(sim, newQ) {
-    sim.body.quaternion.set(newQ.x, newQ.y, newQ.z, newQ.w);
+  _applyMeshRotation(sim, newQ) {
     sim.mesh.quaternion.copy(newQ);
     const offset = sim.mesh?.userData?.visualRotationOffset;
     if (offset) {
@@ -219,14 +208,14 @@ export class RaycasterController {
       );
       sim.mesh.quaternion.multiply(qOff);
     }
-    // Persist rotated orientation so Reset goes back to this pose
     sim.initialPosition = sim.mesh.position.clone();
     sim.initialQuaternion = newQ.clone();
+    sim.initialMeshQuaternion = sim.mesh.quaternion.clone();
   }
 
   _applyRotateDelta(event) {
     const sim = this.selected;
-    if (!sim?.mesh || !sim?.body) return;
+    if (!sim?.mesh) return;
 
     const sensitivity = 0.012;
     const dxPx = event.clientX - this._lastMouseX;
@@ -245,13 +234,8 @@ export class RaycasterController {
     );
     const delta = rotX.clone().multiply(rotY); // apply rotY first, then rotX in world space
 
-    const currentQ = new THREE.Quaternion(
-      sim.body.quaternion.x,
-      sim.body.quaternion.y,
-      sim.body.quaternion.z,
-      sim.body.quaternion.w,
-    );
-    this._applyBodyRotation(sim, delta.multiply(currentQ));
+    const currentQ = sim.mesh.quaternion.clone();
+    this._applyMeshRotation(sim, delta.multiply(currentQ));
     event.preventDefault();
   }
 
@@ -272,13 +256,8 @@ export class RaycasterController {
     e.preventDefault();
 
     const dq = new THREE.Quaternion().setFromAxisAngle(axis, angle);
-    const currentQ = new THREE.Quaternion(
-      this.selected.body.quaternion.x,
-      this.selected.body.quaternion.y,
-      this.selected.body.quaternion.z,
-      this.selected.body.quaternion.w,
-    );
-    this._applyBodyRotation(this.selected, dq.multiply(currentQ));
+    const currentQ = this.selected.mesh.quaternion.clone();
+    this._applyMeshRotation(this.selected, dq.multiply(currentQ));
   }
 
   bindSimObjects(objects) {

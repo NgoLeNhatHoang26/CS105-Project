@@ -85,10 +85,10 @@ export async function attachLoadedModelVisual(sim, url, targetSize) {
   return true;
 }
 
-export function syncLoadedVisualFromBody(sim) {
-  if (!sim?.loadedVisual || !sim.body) return;
-  sim.loadedVisual.position.copy(sim.body.position);
-  sim.loadedVisual.quaternion.copy(sim.body.quaternion);
+export function syncLoadedVisualFromMesh(sim) {
+  if (!sim?.loadedVisual || !sim?.mesh) return;
+  sim.loadedVisual.position.copy(sim.mesh.position);
+  sim.loadedVisual.quaternion.copy(sim.mesh.quaternion);
   const offset = sim.mesh?.userData?.visualRotationOffset;
   if (offset) {
     const q = new THREE.Quaternion().setFromEuler(

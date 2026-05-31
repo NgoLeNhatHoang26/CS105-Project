@@ -1,5 +1,34 @@
 /** Tạo cấu hình lil-gui theo scene */
 
+const OBJECT_MASS = {
+  key: 'khối lượng (kg)',
+  prop: 'mass',
+  min: 0.1,
+  max: 500,
+  step: 0.1,
+  lockRunning: true,
+};
+
+const COLLISION_MASS1 = {
+  key: 'm₁ (kg)',
+  prop: 'mass1',
+  min: 0.1,
+  max: 500,
+  step: 0.1,
+  lockRunning: true,
+  lockScene4: true,
+};
+
+const COLLISION_MASS2 = {
+  key: 'm₂ (kg)',
+  prop: 'mass2',
+  min: 0.1,
+  max: 500,
+  step: 0.1,
+  lockRunning: true,
+  lockScene4: true,
+};
+
 const INCLINE_ANGLE = {
   key: 'độ dốc (°)',
   prop: 'angleDeg',
@@ -32,7 +61,7 @@ export function getSceneGuiConfig(sceneId, state) {
 
   if (sceneId === 1) {
     return [
-      { key: 'khối lượng (kg)', prop: 'mass', min: 0.1, max: 50, step: 0.1, lockRunning: true },
+      { ...OBJECT_MASS },
       { ...INCLINE_ANGLE },
       { ...INCLINE_LENGTH },
       { ...INCLINE_FRICTION },
@@ -43,7 +72,7 @@ export function getSceneGuiConfig(sceneId, state) {
   }
   if (sceneId === 2) {
     return [
-      { key: 'khối lượng (kg)', prop: 'mass', min: 0.1, max: 50, step: 0.1, lockRunning: true },
+      { ...OBJECT_MASS },
       { key: 'h — độ cao đáy (m)', prop: 'initialHeight', min: 1, max: 100, step: 0.5, lockRunning: true },
       { key: 'cản không khí', prop: 'airResistance', lockRunning: false },
       { ...INCLINE_ANGLE, inactive: true },
@@ -56,7 +85,7 @@ export function getSceneGuiConfig(sceneId, state) {
   }
   if (sceneId === 3) {
     return [
-      { key: 'khối lượng (kg)', prop: 'mass', min: 0.1, max: 50, step: 0.1, lockRunning: true },
+      { ...OBJECT_MASS },
       { ...INCLINE_ANGLE, inactive: true },
       { ...INCLINE_LENGTH, inactive: true },
       { ...INCLINE_FRICTION },
@@ -80,8 +109,8 @@ export function getSceneGuiConfig(sceneId, state) {
         lockRunning: true,
         lockScene4: true,
       },
-      { key: 'm₁ (kg)', prop: 'mass1', min: 0.1, max: 50, step: 0.1, lockRunning: true, lockScene4: true },
-      { key: 'm₂ (kg)', prop: 'mass2', min: 0.1, max: 50, step: 0.1, lockRunning: true, lockScene4: true },
+      { ...COLLISION_MASS1 },
+      { ...COLLISION_MASS2 },
       { ...INCLINE_ANGLE, inactive: true },
       { ...INCLINE_LENGTH, inactive: true },
       { key: 'khoảng cách ban đầu (m)', prop: 'initialDistance', min: 1, max: 20, step: 0.5, lockRunning: true, lockScene4: true },
@@ -102,7 +131,7 @@ export function getSceneGuiConfig(sceneId, state) {
         lockRunning: true,
         lockScene4: true,
       },
-      { key: 'hệ số phục hồi e', prop: 'restitution', min: 0, max: 1, step: 0.05, lockRunning: true, lockScene4: true },
+      { key: 'va chạm đàn hồi', prop: 'elasticCollision', lockRunning: true, lockScene4: true },
       { ...INCLINE_FRICTION, lockScene4: true },
       { key: 'cản không khí', prop: 'airResistance', lockRunning: true, lockScene4: true },
       { key: 'pause sau va', prop: 'pauseOnCollision', lockRunning: true, lockScene4: true },

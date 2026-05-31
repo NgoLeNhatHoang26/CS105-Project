@@ -9,7 +9,6 @@ export class BaseScene {
     this.name = name;
     this.objects = [];
     this.meshes = [];
-    this.staticBodies = [];
     this.groups = [];
     this._deps = null;
     this._stopped = false;
@@ -39,7 +38,8 @@ export class BaseScene {
 
   update() {}
 
-  applyRuntimeForces() {}
+  /** Tích phân kinematic một bước dt. Override trong từng scene. */
+  integrate(_dt) {}
 
   onParameterChange() {}
 
@@ -48,7 +48,7 @@ export class BaseScene {
   }
 
   dispose() {
-    const { view, physics } = this._deps || {};
+    const { view } = this._deps || {};
     const scene = view?.getScene();
     this.meshes.forEach((m) => scene?.remove(m));
     this.groups.forEach((g) => scene?.remove(g));
@@ -59,12 +59,9 @@ export class BaseScene {
       }
       if (o.dispose) o.dispose();
       else if (o.mesh) scene?.remove(o.mesh);
-      if (o.body) physics?.removeBody(o.body);
     });
-    this.staticBodies.forEach((b) => physics?.removeBody(b));
     this.objects = [];
     this.meshes = [];
-    this.staticBodies = [];
     this.groups = [];
   }
 

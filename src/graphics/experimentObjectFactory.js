@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
+// Chỉ tạo mesh Three.js — vật lý qua simState + integrators.
 import { createPhongMaterial } from '../components/materials.js';
 
 function clampScale(scale) {
@@ -105,25 +105,6 @@ export function createVisualMesh({
   return { mesh, material: mat, size: s };
 }
 
-function buildCollider(shape, size) {
-  switch (shape) {
-    case 'sphere':
-    case 'teapot':
-    case 'icosahedron':
-      return new CANNON.Sphere(0.55 * size);
-    case 'cylinder':
-    case 'wheel':
-      return new CANNON.Cylinder(0.45 * size, 0.45 * size, size, 20);
-    case 'cone':
-      return new CANNON.Cylinder(0.5 * size, 0.15 * size, size, 20);
-    case 'prism':
-      return new CANNON.Cylinder(0.5 * size, 0.5 * size, size, 3);
-    case 'box':
-    default:
-      return new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2));
-  }
-}
-
 export function createExperimentPair({
   shape = 'box',
   size = 0.6,
@@ -144,15 +125,7 @@ export function createExperimentPair({
     mesh.receiveShadow = true;
   }
 
-  const body = new CANNON.Body({ mass });
-  body.addShape(buildCollider(shape, s));
-  body.position.set(position.x, position.y, position.z);
-  if (mass > 0) {
-    body.linearDamping = damping ? 0.01 : 0;
-    body.angularDamping = damping ? 0.1 : 0;
-  }
-
-  return { mesh, body, shapeType: shape, material: mat, size: s };
+  return { mesh, shapeType: shape, material: mat, size: s };
 }
 
 export function applyVisualRotation(simObject, cfg = {}) {

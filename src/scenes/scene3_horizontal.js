@@ -1,30 +1,20 @@
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS, ARENA_HALF } from '../constants.js';
-import {
-  createStaticBox,
-  saveInitialPose,
-  resetSimObject,
-  syncMeshFromBody,
-  disposeSimObject,
-} from '../components/geometries.js';
+import { disposeSimObject } from '../components/geometries.js';
 import { createTexturedPlane, disposeGridMesh } from '../visualization/gridHelper.js';
-import { degToRad, vecLength } from '../utils/helpers.js';
-import {
-  horizontalForces,
-  kineticEnergy,
-  positionFromBody,
-  velocityFromBody,
-} from '../physics/calculator.js';
-import {
-  applyForceVector,
-  applyHorizontalFriction,
-  clearForces,
-  forceFromAngles,
-  applyAirDrag,
-  computeAirDragMagnitude,
-} from '../physics/forceManager.js';
+import { vecLength } from '../utils/helpers.js';
+import { horizontalForces, kineticEnergy } from '../physics/calculator.js';
+import { forceFromAngles } from '../physics/forceManager.js';
 import { getState } from '../state.js';
 import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+import { createSimState } from '../physics/simObject.js';
+import { integrateHorizontal } from '../physics/integrators/horizontal.js';
+import { syncMeshFromState, saveInitialPoseKinematic, resetSimObjectKinematic } from '../components/simSync.js';
+import {
+  airDragForceVector,
+  computeAirDragMagnitude,
+  objectDragGeometry,
+} from '../physics/airDrag.js';
 
 function parseColor(hex, fallback = 0x4a90d9) {
   if (typeof hex !== 'string') return fallback;
@@ -39,83 +29,39 @@ export class Scene3Horizontal extends BaseScene {
 
   init(deps) {
     super.init(deps);
-    const { view, physics } = deps;
+    const { view } = deps;
     const scene = view.getScene();
+
     const floor = createTexturedPlane(ARENA_HALF * 2, ARENA_HALF * 2, 16, 16);
     floor.mesh.position.y = 0;
     scene.add(floor.mesh);
     this.ground = floor;
     this.meshes.push(floor.mesh);
 
-    const groundBody = createStaticBox(
-      { x: ARENA_HALF * 2, y: 0.2, z: ARENA_HALF * 2 },
-      { x: 0, y: -0.1, z: 0 },
-    );
-    this.staticBodies.push(groundBody);
-    physics.addBody(groundBody);
-
-    this._buildWalls();
-    this.staticBodies.forEach((b) => physics.addBody(b));
     this.onParameterChange();
-  }
-
-  _buildWalls() {
-    const h = 3;
-    const t = 0.5;
-    const positions = [
-      { x: ARENA_HALF, y: h / 2, z: 0 },
-      { x: -ARENA_HALF, y: h / 2, z: 0 },
-      { x: 0, y: h / 2, z: ARENA_HALF },
-      { x: 0, y: h / 2, z: -ARENA_HALF },
-    ];
-    const sizes = [
-      { x: t, y: h, z: ARENA_HALF * 2 },
-      { x: t, y: h, z: ARENA_HALF * 2 },
-      { x: ARENA_HALF * 2, y: h, z: t },
-      { x: ARENA_HALF * 2, y: h, z: t },
-    ];
-    positions.forEach((pos, i) => {
-      const body = createStaticBox(sizes[i], pos);
-      this.staticBodies.push(body);
-    });
   }
 
   _objectSpawnY(params) {
     return ((params.boxSize ?? 0.6) * (params.graphicsScale ?? 1)) / 2 + 0.05;
   }
 
-  _configureObjectPhysics(sim, params) {
-    const { body } = sim;
-    if ((params.graphicsShape ?? params.shape ?? 'box') === 'box') {
-      // Mô hình ma sát trượt: hộp không lăn trên mặt phẳng ngang.
-      body.fixedRotation = true;
-      body.angularFactor.set(0, 0, 0);
-    } else {
-      body.fixedRotation = false;
-      body.angularFactor.set(1, 1, 1);
-    }
-    body.mass = params.mass;
-    body.updateMassProperties();
-    body.angularVelocity.set(0, 0, 0);
-    body.allowSleep = false;
-    body.wakeUp();
-  }
-
   _buildObject(params) {
     const old = this.objects[0];
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
-      this._deps.physics.removeBody(old.body);
       const idx = this.meshes.indexOf(old.mesh);
       if (idx >= 0) this.meshes.splice(idx, 1);
       disposeSimObject(old);
     }
+
     const mass = params.mass;
-    const pos = { x: 0, y: this._objectSpawnY(params), z: 0 };
+    const spawnY = this._objectSpawnY(params);
+    const pos = { x: 0, y: spawnY, z: 0 };
+
     const pair = createExperimentPair({
       shape: params.graphicsShape ?? params.shape ?? 'box',
       size: (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1),
-      mass,
+      mass: 0,
       position: pos,
       color: parseColor(params.graphicsColor, 0x4a90d9),
       wireframe: params.graphicsWireframe,
@@ -123,13 +69,22 @@ export class Scene3Horizontal extends BaseScene {
       textureName: params.graphicsMaterial ?? 'default',
       damping: false,
     });
+    const simState = createSimState({
+      position: { x: 0, y: spawnY, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      mass,
+    });
     const sim = {
       id: 'object_1',
-      ...pair,
+      mesh: pair.mesh,
+      material: pair.material,
+      simState,
       mass,
+      spawnY,
       selectable: true,
-      reset: () => resetSimObject(sim),
+      reset: () => resetSimObjectKinematic(sim),
     };
+
     this.objects = [sim];
     this.meshes.push(sim.mesh);
     applyVisualRotation(sim, params);
@@ -137,14 +92,10 @@ export class Scene3Horizontal extends BaseScene {
 
   onParameterChange() {
     const params = getState().sceneParams;
-    this._deps.physics.setGravity(getState().global.gravity);
-    // Ma sát μ do applyHorizontalFriction; tắt ma sát tiếp xúc Cannon (xung đột với fixedRotation).
-    this._deps.physics.setDefaultFriction(0);
 
     const old = this.objects[0];
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
-      this._deps.physics.removeBody(old.body);
       const idx = this.meshes.indexOf(old.mesh);
       if (idx >= 0) this.meshes.splice(idx, 1);
       disposeSimObject(old);
@@ -154,50 +105,57 @@ export class Scene3Horizontal extends BaseScene {
     const scene = this._deps.view.getScene();
     const obj = this.objects[0];
     scene.add(obj.mesh);
-    this._deps.physics.addBody(obj.body);
-    this._configureObjectPhysics(obj, params);
-    saveInitialPose(obj);
+    saveInitialPoseKinematic(obj);
     this._stopped = false;
   }
 
-  applyRuntimeForces() {
+  integrate(dt) {
     if (this._stopped || !this.objects[0]) return;
+    const obj = this.objects[0];
     const params = getState().sceneParams;
     const g = getState().global.gravity;
-    const obj = this.objects[0];
-    clearForces(obj.body);
-    const applied = forceFromAngles(params.forceMag, params.forceAngleDeg, 'xz');
-    applyForceVector(obj.body, applied);
-    applyHorizontalFriction(obj.body, params.mass, g, params.friction, applied);
-    if (params.airResistance) {
-      const shape = params.graphicsShape ?? 'box';
-      const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
-      applyAirDrag(obj.body, shape, size);
+
+    const next = integrateHorizontal(
+      {
+        x: obj.simState.position.x,
+        z: obj.simState.position.z,
+        vx: obj.simState.velocity.x,
+        vz: obj.simState.velocity.z,
+      },
+      params,
+      g,
+      dt,
+      ARENA_HALF,
+    );
+
+    obj.simState.position.x = next.x;
+    obj.simState.position.z = next.z;
+    obj.simState.velocity.x = next.vx;
+    obj.simState.velocity.z = next.vz;
+    obj.simState.position.y = obj.spawnY;
+
+    const limit = ARENA_HALF - 1;
+    if (Math.abs(next.x) >= limit || Math.abs(next.z) >= limit) {
+      obj.simState.velocity.x = 0;
+      obj.simState.velocity.z = 0;
+      this.stopSimulation();
     }
   }
 
   update() {
     const obj = this.objects[0];
     if (!obj || this._stopped) return;
-    syncMeshFromBody(obj.mesh, obj.body);
-
-    const p = obj.body.position;
-    const limit = ARENA_HALF - 1;
-    if (Math.abs(p.x) > limit || Math.abs(p.z) > limit) {
-      obj.body.velocity.set(0, 0, 0);
-      obj.body.angularVelocity.set(0, 0, 0);
-      this.stopSimulation();
-      return;
-    }
 
     const params = getState().sceneParams;
-    const speed = vecLength(obj.body.velocity.x, 0, obj.body.velocity.z);
+    syncMeshFromState(obj);
+
+    const speed = vecLength(obj.simState.velocity.x, 0, obj.simState.velocity.z);
     const maxF = params.friction * params.mass * getState().global.gravity;
     const applied = forceFromAngles(params.forceMag, params.forceAngleDeg, 'xz');
-    const appliedHoriz = vecLength(applied.x, 0, applied.z);
-    if (speed < 0.05 && appliedHoriz <= maxF) {
-      obj.body.velocity.set(0, 0, 0);
-      obj.body.angularVelocity.set(0, 0, 0);
+    const appliedH = vecLength(applied.x, 0, applied.z);
+    if (speed < 0.01 && appliedH <= maxF) {
+      obj.simState.velocity.x = 0;
+      obj.simState.velocity.z = 0;
     }
   }
 
@@ -208,9 +166,10 @@ export class Scene3Horizontal extends BaseScene {
     const obj = this.objects[0];
     if (!obj) return { time: s.simulationTime, sceneName: this.name };
 
-    const pos = positionFromBody(obj.body);
-    const vel = velocityFromBody(obj.body);
+    const pos = { ...obj.simState.position };
+    const vel = { ...obj.simState.velocity };
     const speed = vecLength(vel.x, vel.y, vel.z);
+
     const forces = horizontalForces(
       params.mass,
       g,
@@ -224,6 +183,7 @@ export class Scene3Horizontal extends BaseScene {
     const normalVec = { x: 0, y: params.mass * g, z: 0 };
     const horizontalSpeed = vecLength(vel.x, 0, vel.z);
     const frictionMag = params.friction * params.mass * g;
+
     let frictionVec = { x: 0, y: 0, z: 0 };
     if (horizontalSpeed > 0.01) {
       frictionVec = {
@@ -241,19 +201,19 @@ export class Scene3Horizontal extends BaseScene {
         };
       }
     }
-    const shape = params.graphicsShape ?? 'box';
-    const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
-    const dragMag = params.airResistance ? computeAirDragMagnitude(obj.body, shape, size) : 0;
-    const dragVec = (dragMag > 0 && horizontalSpeed > 1e-4)
-      ? { x: -dragMag * vel.x / horizontalSpeed, y: 0, z: -dragMag * vel.z / horizontalSpeed }
+
+    const { shape, size } = objectDragGeometry(params);
+    const dragMag = params.airResistance ? computeAirDragMagnitude(horizontalSpeed, shape, size) : 0;
+    const dragVec = dragMag > 0 && horizontalSpeed > 1e-4
+      ? airDragForceVector({ x: vel.x, y: 0, z: vel.z }, shape, size)
       : { x: 0, y: 0, z: 0 };
     forces.drag = dragMag;
     forces.net = Math.max(0, forces.net - dragMag);
 
     const netVec = {
-      x: appliedVec.x + gravityVec.x + normalVec.x + frictionVec.x + dragVec.x,
-      y: appliedVec.y + gravityVec.y + normalVec.y + frictionVec.y,
-      z: appliedVec.z + gravityVec.z + normalVec.z + frictionVec.z + dragVec.z,
+      x: appliedVec.x + frictionVec.x + dragVec.x,
+      y: 0,
+      z: appliedVec.z + frictionVec.z + dragVec.z,
     };
 
     return {
@@ -278,7 +238,10 @@ export class Scene3Horizontal extends BaseScene {
         drag: dragMag > 0 ? dragVec : null,
         net: netVec,
       },
-      sceneSpecific: { friction: params.friction, positionXZ: `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` },
+      sceneSpecific: {
+        friction: params.friction,
+        positionXZ: `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})`,
+      },
     };
   }
 

@@ -1,5 +1,10 @@
 /** Preset tình huống va chạm 1D (scene 4). */
 
+/** e = 1 nếu bật va đàn hồi, e = 0 nếu không (mức THCS). */
+export function collisionRestitution(params) {
+  return params.elasticCollision ? 1 : 0;
+}
+
 export const COLLISION_MODE_OPTIONS = {
   'Va trực diện': 'head_on',
   'Một vật chạy': 'one_moving',

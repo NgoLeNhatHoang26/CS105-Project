@@ -3,13 +3,11 @@ import { getState, setScene as setStateScene } from '../state.js';
 import { applySceneLoadedModels } from '../graphics/applySceneModels.js';
 
 export class SceneManager {
-  constructor(view, physics, textureMap = null) {
+  constructor(view, textureMap = null) {
     this.view = view;
-    this.physics = physics;
     this.activeScene = null;
     this.deps = {
       view,
-      physics,
       textureMap,
       onStop: null,
     };
@@ -22,7 +20,6 @@ export class SceneManager {
   loadScene(sceneId) {
     this.dispose();
     setStateScene(sceneId);
-    this.physics.clearBodies();
     this.activeScene = createScene(sceneId, this.deps);
     return this.activeScene;
   }
@@ -35,8 +32,8 @@ export class SceneManager {
     this.activeScene?.update(dt);
   }
 
-  applyRuntimeForces() {
-    this.activeScene?.applyRuntimeForces();
+  integrate(dt) {
+    this.activeScene?.integrate?.(dt);
   }
 
   onParameterChange() {
@@ -61,6 +58,5 @@ export class SceneManager {
   dispose() {
     this.activeScene?.dispose();
     this.activeScene = null;
-    this.physics.clearBodies();
   }
 }

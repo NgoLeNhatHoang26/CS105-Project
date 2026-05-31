@@ -11,6 +11,11 @@ const COLORS = {
   net: 0xffffff,
 };
 
+const LOCAL_ORIGIN = new THREE.Vector3(0, 0, 0);
+
+const HIDE_BELOW_N = 0.25;
+const NET_HIDE_BELOW_N = 0.5;
+
 export class ForceVisualizer {
   constructor(scene) {
     this.scene = scene;
@@ -19,7 +24,7 @@ export class ForceVisualizer {
     scene.add(this.group);
     this.arrows = new Map();
     this.lengthScale = 0.04;
-    this.minLength = 0.35;
+    this.minLength = 0.2;
     this.maxLength = 3.25;
   }
 
@@ -36,7 +41,7 @@ export class ForceVisualizer {
     if (!arrow) {
       arrow = new THREE.ArrowHelper(
         new THREE.Vector3(1, 0, 0),
-        new THREE.Vector3(),
+        LOCAL_ORIGIN,
         1,
         color,
         0.22,
@@ -48,18 +53,21 @@ export class ForceVisualizer {
     return arrow;
   }
 
-  _setArrow(key, vector, origin, color) {
+  _setArrow(key, vector, color) {
     const arrow = this._getOrCreateArrow(key, color);
     const magnitude = vector.length();
-    if (magnitude < 1e-4) {
+    const hideThreshold = key === 'net' ? NET_HIDE_BELOW_N : HIDE_BELOW_N;
+    if (magnitude < hideThreshold) {
       arrow.visible = false;
       return;
     }
+
     const dir = vector.clone().normalize();
-    const length = clamp(magnitude * this.lengthScale, this.minLength, this.maxLength);
+    const rawLen = magnitude * this.lengthScale;
+    const length = clamp(rawLen, this.minLength, this.maxLength);
+    arrow.position.set(0, 0, 0);
     arrow.setDirection(dir);
     arrow.setLength(length, length * 0.22, length * 0.12);
-    arrow.position.copy(origin);
     arrow.visible = true;
   }
 
@@ -88,11 +96,13 @@ export class ForceVisualizer {
   updateFromTelemetry(telemetry, origin) {
     const mode = getState().display.showVectors;
     if (mode === 'none' || !telemetry?.forceVectors) {
+      this.group.position.set(0, 0, 0);
       this._hideUnused(new Set());
       return;
     }
 
-    const o = new THREE.Vector3(origin.x, origin.y, origin.z);
+    this.group.position.set(origin.x ?? 0, origin.y ?? 0, origin.z ?? 0);
+
     const vectors = telemetry.forceVectors;
     const visible = new Set();
 
@@ -104,7 +114,7 @@ export class ForceVisualizer {
       if (!vec) return;
       const allow = showAll || (showSelected && (key === 'applied' || key === 'net'));
       if (!allow) return;
-      this._setArrow(key, vec, o, COLORS[key]);
+      this._setArrow(key, vec, COLORS[key]);
       visible.add(key);
     };
 
@@ -121,4 +131,14 @@ export class ForceVisualizer {
     this.clear();
     this.scene.remove(this.group);
   }
+}
+
+export function getForceOriginFromScene(activeScene) {
+  const obj = activeScene?.objects?.[0];
+  if (obj?.mesh) {
+    const p = new THREE.Vector3();
+    obj.mesh.getWorldPosition(p);
+    return { x: p.x, y: p.y, z: p.z };
+  }
+  return null;
 }
