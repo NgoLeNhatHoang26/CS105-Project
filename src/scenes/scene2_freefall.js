@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS } from '../constants.js';
 import {
@@ -179,15 +180,16 @@ export class Scene2FreeFall extends BaseScene {
     const dragVec = (dragMag > 0 && speed > 1e-4)
       ? { x: -dragMag * vel.x / speed, y: -dragMag * vel.y / speed, z: -dragMag * vel.z / speed }
       : { x: 0, y: 0, z: 0 };
+    const heightBottom = bottomYFromCenterY(pos.y, r);
+    const nearGround = heightBottom <= GROUND_EPS + 0.05;
+    const normalForNet = nearGround ? params.mass * g : 0;
     const netVec = {
       x: appliedVec.x + gravityVec.x + dragVec.x,
-      y: appliedVec.y + gravityVec.y + dragVec.y,
+      y: appliedVec.y + gravityVec.y + normalForNet + dragVec.y,
       z: appliedVec.z + gravityVec.z + dragVec.z,
     };
     const forces = freeFallForces(params.mass, g, appliedVec, netVec);
     forces.drag = dragMag;
-    const heightBottom = bottomYFromCenterY(pos.y, r);
-    const nearGround = heightBottom <= GROUND_EPS + 0.05;
     const pureFreeFall = params.forceMag === 0 && !params.airResistance;
     const t = s.simulationTime;
     const theory = pureFreeFall ? theoreticalFreeFall(g, t, releaseH) : null;

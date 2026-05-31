@@ -316,7 +316,7 @@ export class Scene1Incline extends BaseScene {
     const normalVec = {
       x: normalUnit.x * forces.normal,
       y: normalUnit.y * forces.normal,
-      z: 0,
+      z: normalUnit.z * forces.normal,
     };
     const velocityAlong = vel.x * alongUnit.x + vel.y * alongUnit.y + vel.z * alongUnit.z;
     const driveAlong = forces.weightParallel + params.forceMag * Math.cos(forceAngle);
@@ -336,7 +336,7 @@ export class Scene1Incline extends BaseScene {
     const netVec = {
       x: appliedVec.x + gravityVec.x + normalVec.x + frictionVec.x,
       y: appliedVec.y + gravityVec.y + normalVec.y + frictionVec.y,
-      z: 0,
+      z: appliedVec.z + frictionVec.z,
     };
 
     return {

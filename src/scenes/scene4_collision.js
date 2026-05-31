@@ -396,6 +396,21 @@ export class Scene4Collision extends BaseScene {
       ? computeAirDragMagnitude(o1.body, params.graphicsObject1Shape ?? 'sphere', size1)
       : 0;
 
+    const gravityVec4 = params.gravityEnabled ? { x: 0, y: -m1 * g, z: 0 } : null;
+    const normalVec4 = params.gravityEnabled ? { x: 0, y: m1 * g, z: 0 } : null;
+    const frictionSign1 = v1.x > 0 ? -1 : 1;
+    const frictionVec4 = (activeFriction > 0 && Math.abs(v1.x) > 0.01)
+      ? { x: frictionSign1 * activeFriction, y: 0, z: 0 }
+      : null;
+    const dragVec4 = (dragMag1 > 0 && Math.abs(v1.x) > 1e-4)
+      ? { x: (v1.x > 0 ? -1 : 1) * dragMag1, y: 0, z: 0 }
+      : null;
+    const netVec4 = {
+      x: (frictionVec4?.x ?? 0) + (dragVec4?.x ?? 0),
+      y: 0,
+      z: 0,
+    };
+
     return {
       time: s.simulationTime,
       sceneName: this.name,
@@ -414,10 +429,11 @@ export class Scene4Collision extends BaseScene {
       },
       forceVectors: {
         applied: null,
-        gravity: null,
-        normal: null,
-        friction: null,
-        net: null,
+        gravity: gravityVec4,
+        normal: normalVec4,
+        friction: frictionVec4,
+        drag: dragVec4,
+        net: netVec4,
       },
       sceneSpecific: {
         collisionMode: params.collisionMode,
