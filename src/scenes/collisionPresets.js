@@ -2,7 +2,7 @@
 
 /** e = 1 nếu bật va đàn hồi, ngược lại dùng params.restitution (mặc định 0.6). */
 export function collisionRestitution(params) {
-  return params.elasticCollision ? 1 : (params.restitution ?? 0.6);
+  return params.elasticCollision ? 1 : (params.restitution ?? 0);
 }
 
 export const COLLISION_MODE_OPTIONS = {
