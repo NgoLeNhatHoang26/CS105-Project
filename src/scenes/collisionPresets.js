@@ -1,8 +1,8 @@
 /** Preset tình huống va chạm 1D (scene 4). */
 
-/** e = 1 nếu bật va đàn hồi, e = 0 nếu không (mức THCS). */
+/** e = 1 nếu bật va đàn hồi, ngược lại dùng params.restitution (mặc định 0.6). */
 export function collisionRestitution(params) {
-  return params.elasticCollision ? 1 : 0;
+  return params.elasticCollision ? 1 : (params.restitution ?? 0.6);
 }
 
 export const COLLISION_MODE_OPTIONS = {

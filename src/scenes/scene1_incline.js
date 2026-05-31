@@ -230,9 +230,26 @@ export class Scene1Incline extends BaseScene {
     const obj = this.objects[0];
     if (!obj || this._stopped) return;
 
+    const params = getState().sceneParams;
     const rampQuat = getRampFrameQuaternion(this.inclineData);
+    const shape = params.graphicsShape ?? 'box';
+
+    if (shape !== 'box') {
+      // Tính góc lăn dựa trên quãng đường đã trượt
+      const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
+      const radius = size / 2;
+      const distTraveled = Math.max(0, obj.sAlong - this.spawnDownOffset);
+      const rollQuat = new THREE.Quaternion().setFromAxisAngle(
+        this.inclineData.rampRight,
+        distTraveled / radius,
+      );
+      // rollQuat * rampQuat: trước tiên xoay về khung dốc, sau đó lăn theo trục rampRight
+      obj.mesh.quaternion.multiplyQuaternions(rollQuat, rampQuat);
+    } else {
+      obj.mesh.quaternion.copy(rampQuat);
+    }
+
     syncMeshFromState(obj);
-    obj.mesh.quaternion.copy(rampQuat);
   }
 
   getTelemetry() {
