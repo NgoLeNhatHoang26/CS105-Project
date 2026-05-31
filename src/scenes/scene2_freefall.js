@@ -1,21 +1,10 @@
+import * as THREE from 'three';
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS } from '../constants.js';
-import {
-  createStaticPlaneBody,
-  saveInitialPose,
-  resetSimObject,
-  syncMeshFromBody,
-  disposeSimObject,
-} from '../components/geometries.js';
+import { disposeSimObject } from '../components/geometries.js';
 import { createTexturedPlane, disposeGridMesh } from '../visualization/gridHelper.js';
 import { degToRad, vecLength } from '../utils/helpers.js';
-import {
-  freeFallForces,
-  kineticEnergy,
-  positionFromBody,
-  velocityFromBody,
-} from '../physics/calculator.js';
-import { applyForceVector, clearForces, applyAirDrag, computeAirDragMagnitude } from '../physics/forceManager.js';
+import { freeFallForces, kineticEnergy } from '../physics/calculator.js';
 import { getState } from '../state.js';
 import {
   GROUND_EPS,
@@ -25,7 +14,15 @@ import {
   minCenterYAtGround,
   theoreticalFreeFall,
 } from './scene2Helpers.js';
-import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+import { createVisualMesh, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+import { createSimState } from '../physics/simObject.js';
+import { integrateFreeFall } from '../physics/integrators/freeFall.js';
+import { syncMeshFromState, saveInitialPoseKinematic, resetSimObjectKinematic } from '../components/simSync.js';
+import {
+  airDragForceVector,
+  computeAirDragMagnitude,
+  objectDragGeometry,
+} from '../physics/airDrag.js';
 
 function parseColor(hex, fallback = 0x4a90d9) {
   if (typeof hex !== 'string') return fallback;
@@ -40,7 +37,7 @@ export class Scene2FreeFall extends BaseScene {
 
   init(deps) {
     super.init(deps);
-    const { view, physics } = deps;
+    const { view } = deps;
     const scene = view.getScene();
     const params = getState().sceneParams;
 
@@ -50,15 +47,10 @@ export class Scene2FreeFall extends BaseScene {
     this.ground = floor;
     this.meshes.push(floor.mesh);
 
-    const groundBody = createStaticPlaneBody(0);
-    this.staticBodies.push(groundBody);
-    physics.addBody(groundBody);
-
     this._buildObject(params);
     this.objects.forEach((o) => {
       scene.add(o.mesh);
-      physics.addBody(o.body);
-      saveInitialPose(o);
+      saveInitialPoseKinematic(o);
     });
   }
 
@@ -66,7 +58,6 @@ export class Scene2FreeFall extends BaseScene {
     const old = this.objects[0];
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
-      this._deps.physics.removeBody(old.body);
       disposeSimObject(old);
     }
 
@@ -74,28 +65,30 @@ export class Scene2FreeFall extends BaseScene {
     const bottomH = params.initialHeight;
     const mass = params.mass;
     const pos = { x: 0, y: centerYFromBottomHeight(bottomH, r), z: 0 };
-    const bodyOpts = { mass, position: pos, damping: false };
-
     const s = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
-    const pair = createExperimentPair({
+    const color = parseColor(params.graphicsColor, 0x4a90d9);
+    const vis = createVisualMesh({
       shape: params.graphicsShape ?? params.shape ?? 'box',
       size: s,
-      ...bodyOpts,
-      color: parseColor(params.graphicsColor, 0x4a90d9),
+      color,
       wireframe: params.graphicsWireframe,
       textureMap: this._deps.textureMap,
       textureName: params.graphicsMaterial ?? 'default',
     });
-
+    vis.mesh.position.set(pos.x, pos.y, pos.z);
+    const state = createSimState({ position: { ...pos }, velocity: { x: 0, y: 0, z: 0 }, mass });
     const sim = {
       id: 'object_1',
-      ...pair,
+      mesh: vis.mesh,
+      material: vis.material,
+      simState: state,
       mass,
       radius: r,
       releaseHeight: bottomH,
       selectable: true,
-      reset: () => resetSimObject(sim),
+      reset: () => resetSimObjectKinematic(sim),
     };
+
     this.objects = [sim];
     this.meshes.push(sim.mesh);
     applyVisualRotation(sim, params);
@@ -103,52 +96,60 @@ export class Scene2FreeFall extends BaseScene {
 
   onParameterChange() {
     const params = getState().sceneParams;
-    this._deps.physics.setGravity(getState().global.gravity);
     const old = this.objects[0];
     if (old) {
       this._deps.view.getScene().remove(old.mesh);
-      this._deps.physics.removeBody(old.body);
       disposeSimObject(old);
     }
     this._buildObject(params);
     const scene = this._deps.view.getScene();
     const obj = this.objects[0];
     scene.add(obj.mesh);
-    this._deps.physics.addBody(obj.body);
-    saveInitialPose(obj);
+    saveInitialPoseKinematic(obj);
     this._stopped = false;
   }
 
-  applyRuntimeForces() {
+  integrate(dt) {
     if (this._stopped || !this.objects[0]) return;
-    const params = getState().sceneParams;
     const obj = this.objects[0];
-    clearForces(obj.body);
-    const hRad = degToRad(params.forceAngleHorizontal);
-    const vRad = degToRad(params.forceAngleVertical);
-    const mag = params.forceMag;
-    const fx = mag * Math.cos(vRad) * Math.cos(hRad);
-    const fy = mag * Math.sin(vRad);
-    const fz = mag * Math.cos(vRad) * Math.sin(hRad);
-    applyForceVector(obj.body, { x: fx, y: fy, z: fz });
-    if (params.airResistance) {
-      const shape = params.graphicsShape ?? 'box';
-      const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
-      applyAirDrag(obj.body, shape, size);
+    const params = getState().sceneParams;
+    const g = getState().global.gravity;
+    const groundY = minCenterYAtGround(obj.radius);
+
+    const { pos, vel, hitGround } = integrateFreeFall(
+      { pos: { ...obj.simState.position }, vel: { ...obj.simState.velocity } },
+      params,
+      g,
+      dt,
+      obj.radius,
+      groundY,
+    );
+
+    obj.simState.position.x = pos.x;
+    obj.simState.position.y = pos.y;
+    obj.simState.position.z = pos.z;
+    obj.simState.velocity.x = vel.x;
+    obj.simState.velocity.y = vel.y;
+    obj.simState.velocity.z = vel.z;
+
+    if (hitGround) {
+      this.stopSimulation();
     }
   }
 
   update() {
     const obj = this.objects[0];
     if (!obj || this._stopped) return;
-    syncMeshFromBody(obj.mesh, obj.body);
+
+    syncMeshFromState(obj);
     const r = obj.radius ?? getObjectRadius(getState().sceneParams);
     const yMin = minCenterYAtGround(r);
-    if (obj.body.position.y <= yMin) {
-      obj.body.position.y = yMin;
-      obj.body.velocity.set(0, 0, 0);
-      obj.body.angularVelocity.set(0, 0, 0);
-      syncMeshFromBody(obj.mesh, obj.body);
+    if (obj.simState.position.y <= yMin) {
+      obj.simState.position.y = yMin;
+      obj.simState.velocity.x = 0;
+      obj.simState.velocity.y = 0;
+      obj.simState.velocity.z = 0;
+      syncMeshFromState(obj);
       this.stopSimulation();
     }
   }
@@ -160,8 +161,9 @@ export class Scene2FreeFall extends BaseScene {
     const obj = this.objects[0];
     if (!obj) return { time: s.simulationTime, sceneName: this.name };
 
-    const pos = positionFromBody(obj.body);
-    const vel = velocityFromBody(obj.body);
+    const pos = { ...obj.simState.position };
+    const vel = { ...obj.simState.velocity };
+
     const r = obj.radius ?? getObjectRadius(params);
     const releaseH = obj.releaseHeight ?? params.initialHeight;
     const hRad = degToRad(params.forceAngleHorizontal);
@@ -172,12 +174,11 @@ export class Scene2FreeFall extends BaseScene {
       z: params.forceMag * Math.cos(vRad) * Math.sin(hRad),
     };
     const gravityVec = { x: 0, y: -params.mass * g, z: 0 };
-    const shape = params.graphicsShape ?? 'box';
-    const size = (params.boxSize ?? 0.6) * (params.graphicsScale ?? 1);
-    const dragMag = params.airResistance ? computeAirDragMagnitude(obj.body, shape, size) : 0;
     const speed = vecLength(vel.x, vel.y, vel.z);
-    const dragVec = (dragMag > 0 && speed > 1e-4)
-      ? { x: -dragMag * vel.x / speed, y: -dragMag * vel.y / speed, z: -dragMag * vel.z / speed }
+    const { shape, size } = objectDragGeometry(params);
+    const dragMag = params.airResistance ? computeAirDragMagnitude(speed, shape, size) : 0;
+    const dragVec = dragMag > 0 && speed > 1e-4
+      ? airDragForceVector(vel, shape, size)
       : { x: 0, y: 0, z: 0 };
     const netVec = {
       x: appliedVec.x + gravityVec.x + dragVec.x,
@@ -233,7 +234,7 @@ export class Scene2FreeFall extends BaseScene {
   }
 
   getDragPlane(sim) {
-    const y = sim.body?.position?.y ?? sim.mesh?.position?.y ?? 1;
+    const y = sim.simState?.position?.y ?? sim.mesh?.position?.y ?? 1;
     return new THREE.Plane(new THREE.Vector3(0, 1, 0), -y);
   }
 

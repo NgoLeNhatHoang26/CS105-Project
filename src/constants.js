@@ -110,7 +110,8 @@ export const DEFAULT_SCENE_PARAMS = {
     angleDeg: 30,
     length: 5,
     collisionMode: 'head_on',
-    restitution: 0.6,
+    /** Tắt: va không đàn hồi (e=0); bật: va đàn hồi (e=1). */
+    elasticCollision: false,
     object1InitVelocity: 5,
     object2InitVelocity: 5,
     object1Direction: 1,

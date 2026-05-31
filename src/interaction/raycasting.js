@@ -1,18 +1,13 @@
 import * as THREE from 'three';
 import { canDragObjects, isRunning, setParameter } from '../state.js';
 import { setHighlight } from '../components/materials.js';
-import { syncBodyFromMesh, saveInitialPose } from '../components/geometries.js';
-import { syncLoadedVisualFromBody } from '../graphics/modelLoader.js';
 import {
   defaultDragPlane,
   constrainDragPosition,
   syncFreeFallHeightAfterDrag,
 } from './dragConstraints.js';
-import {
-  computeBoxHalfExtentAlongNormal,
-  constrainBodyToRamp,
-  getRampFrameQuaternion,
-} from '../scenes/inclineHelpers.js';
+import { getRampFrameQuaternion } from '../scenes/inclineHelpers.js';
+import { saveInitialPoseKinematic } from '../components/simSync.js';
 import { SCENE_IDS } from '../constants.js';
 
 /**
@@ -104,21 +99,16 @@ export class RaycasterController {
     if (!constrained) return;
 
     sim.mesh.position.copy(constrained);
+    sim.simState.position.x = constrained.x;
+    sim.simState.position.y = constrained.y;
+    sim.simState.position.z = constrained.z;
+    sim.simState.velocity.x = 0;
+    sim.simState.velocity.y = 0;
+    sim.simState.velocity.z = 0;
 
     if (sceneId === SCENE_IDS.INCLINE && scene?.inclineData) {
-      const halfHeight = computeBoxHalfExtentAlongNormal(
-        scene.objectDims ?? { width: 0.6, height: 0.6, depth: 0.6 },
-        scene.inclineData,
-      );
-      const rampQuat = getRampFrameQuaternion(scene.inclineData);
-      sim.mesh.quaternion.copy(rampQuat);
-      sim.body.quaternion.copy(rampQuat);
-      constrainBodyToRamp(sim.body, scene.inclineData, halfHeight);
-      sim.mesh.position.copy(sim.body.position);
+      sim.mesh.quaternion.copy(getRampFrameQuaternion(scene.inclineData));
     }
-
-    syncBodyFromMesh(sim.body, sim.mesh);
-    syncLoadedVisualFromBody(sim);
   }
 
   _onDown(event) {
@@ -184,7 +174,7 @@ export class RaycasterController {
         const h = syncFreeFallHeightAfterDrag(this.selected);
         setParameter('initialHeight', h);
       }
-      saveInitialPose(this.selected);
+      saveInitialPoseKinematic(this.selected);
     } else if (!this.pointerMoved && this.pendingSelect) {
       this._clearHighlight();
       this.selected = this.pendingSelect;

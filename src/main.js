@@ -1,5 +1,4 @@
 import { ViewRenderer } from './engine/view.js';
-import { PhysicsEngine } from './engine/physics.js';
 import { SceneManager } from './engine/sceneManager.js';
 import { setupOrbitControls, resetCameraView } from './interaction/controls.js';
 import { RaycasterController } from './interaction/raycasting.js';
@@ -8,7 +7,7 @@ import { initStats } from './ui/stats.js';
 import { DebugVisualizer } from './visualization/debugHelpers.js';
 import { ForceVisualizer } from './visualization/vectorHelpers.js';
 import { buildTextureMap } from './graphics/proceduralTextures.js';
-import { syncSimObjectFromBody } from './components/geometries.js';
+import { syncMeshFromState } from './components/simSync.js';
 import { applySceneLoadedModels } from './graphics/applySceneModels.js';
 import {
   getState,
@@ -31,9 +30,7 @@ const view = new ViewRenderer(canvas);
 view.init();
 
 const textureMap = buildTextureMap();
-
-const physics = new PhysicsEngine(getState().global.gravity);
-const sceneManager = new SceneManager(view, physics, textureMap);
+const sceneManager = new SceneManager(view, textureMap);
 
 sceneManager.setOnStop(() => setPlayback('pause'));
 
@@ -85,14 +82,12 @@ const ui = new UIManager({
   },
 });
 
-// ── Graphics panel (appended to lil-gui after UIManager is ready) ──────────
 ui.buildGraphicsPanel({
   lights: view.lights,
   view,
   controls,
   sceneManager,
 });
-// ───────────────────────────────────────────────────────────────────────────
 
 document.getElementById('btn-play')?.addEventListener('click', () => {
   setPlayback('play');
@@ -154,7 +149,7 @@ subscribe(() => {
 
 function syncMeshes() {
   const objects = sceneManager.getActiveScene()?.objects ?? [];
-  objects.forEach((o) => syncSimObjectFromBody(o));
+  objects.forEach((o) => syncMeshFromState(o));
 }
 
 function loop(now) {
@@ -168,8 +163,7 @@ function loop(now) {
     const speed = getState().speedMultiplier;
     physicsAccumulator += frameDt * speed;
     while (physicsAccumulator >= PHYSICS_FIXED_DT) {
-      sceneManager.applyRuntimeForces();
-      physics.step(PHYSICS_FIXED_DT);
+      sceneManager.integrate(PHYSICS_FIXED_DT);
       sceneManager.update(PHYSICS_FIXED_DT);
       physicsAccumulator -= PHYSICS_FIXED_DT;
       advanceSimulationTime(PHYSICS_FIXED_DT);

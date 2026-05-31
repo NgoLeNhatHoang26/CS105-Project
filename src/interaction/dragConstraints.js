@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
 import { getState } from '../state.js';
 import { SCENE_IDS, ARENA_HALF } from '../constants.js';
 import {
@@ -10,11 +9,21 @@ import {
 } from '../scenes/inclineHelpers.js';
 import { bottomYFromCenterY, centerYFromBottomHeight } from '../scenes/scene2Helpers.js';
 
-/**
- * Mặt phẳng kéo mặc định: ngang qua vị trí hiện tại của vật.
- */
+function makeVec3(x, y, z) {
+  return {
+    x,
+    y,
+    z,
+    set(nx, ny, nz) {
+      this.x = nx;
+      this.y = ny;
+      this.z = nz;
+    },
+  };
+}
+
 export function defaultDragPlane(simObject) {
-  const y = simObject.mesh?.position?.y ?? simObject.body?.position?.y ?? 0;
+  const y = simObject.simState?.position?.y ?? simObject.mesh?.position?.y ?? 0;
   return new THREE.Plane(new THREE.Vector3(0, 1, 0), -y);
 }
 
@@ -25,7 +34,7 @@ export function constrainDragPosition(sceneId, scene, simObject, point) {
     case SCENE_IDS.INCLINE:
       return constrainInclineDrag(scene, simObject, point);
     case SCENE_IDS.FREE_FALL:
-      return constrainFreeFallDrag(scene, simObject, point);
+      return constrainFreeFallDrag(simObject, point);
     case SCENE_IDS.HORIZONTAL:
       return constrainHorizontalDrag(simObject, point);
     case SCENE_IDS.COLLISION:
@@ -45,8 +54,8 @@ function constrainInclineDrag(scene, simObject, point) {
   );
 
   const bodyProxy = {
-    position: new CANNON.Vec3(point.x, point.y, point.z),
-    velocity: new CANNON.Vec3(0, 0, 0),
+    position: makeVec3(point.x, point.y, point.z),
+    velocity: makeVec3(0, 0, 0),
   };
   constrainBodyToRamp(bodyProxy, inclineData, halfHeight);
 
@@ -58,10 +67,14 @@ function constrainInclineDrag(scene, simObject, point) {
   dist = Math.max(0, Math.min(maxDist, dist));
 
   const pos = computeSpawnPosition(inclineData, halfHeight, dist, scene.spawnNormalOffset ?? 0.03);
+
+  simObject.sAlong = dist;
+  simObject.vAlong = 0;
+
   return pos;
 }
 
-function constrainFreeFallDrag(scene, simObject, point) {
+function constrainFreeFallDrag(_scene, simObject, point) {
   const r = simObject.radius ?? 0.3;
   const minY = r + 0.05;
   const maxY = 100;
@@ -73,10 +86,10 @@ function constrainFreeFallDrag(scene, simObject, point) {
   );
 }
 
-/** Sau khi kéo scene 2: cập nhật độ cao ban đầu theo đáy vật. */
 export function syncFreeFallHeightAfterDrag(simObject) {
   const r = simObject.radius ?? 0.3;
-  const bottom = bottomYFromCenterY(simObject.body.position.y, r);
+  const sourceY = simObject.simState.position.y;
+  const bottom = bottomYFromCenterY(sourceY, r);
   simObject.releaseHeight = Math.max(0.5, bottom);
   return simObject.releaseHeight;
 }
@@ -84,7 +97,7 @@ export function syncFreeFallHeightAfterDrag(simObject) {
 export function applyFreeFallHeightToBody(simObject, bottomHeight) {
   const r = simObject.radius ?? 0.3;
   const y = centerYFromBottomHeight(bottomHeight, r);
-  simObject.body.position.y = y;
+  simObject.simState.position.y = y;
   simObject.mesh.position.y = y;
   if (simObject.loadedVisual) {
     simObject.loadedVisual.position.y = y;
@@ -92,8 +105,14 @@ export function applyFreeFallHeightToBody(simObject, bottomHeight) {
 }
 
 function constrainHorizontalDrag(simObject, point) {
-  const y = simObject.body?.position?.y ?? simObject.mesh?.position?.y ?? 0.5;
+  const y = simObject.simState?.position?.y ?? simObject.mesh?.position?.y ?? 0.5;
   const limit = ARENA_HALF - 1;
+
+  simObject.simState.position.x = THREE.MathUtils.clamp(point.x, -limit, limit);
+  simObject.simState.position.z = THREE.MathUtils.clamp(point.z, -limit, limit);
+  simObject.simState.velocity.x = 0;
+  simObject.simState.velocity.z = 0;
+
   return new THREE.Vector3(
     THREE.MathUtils.clamp(point.x, -limit, limit),
     y,
@@ -110,14 +129,17 @@ function constrainCollisionDrag(scene, simObject, point) {
 
   let x = THREE.MathUtils.clamp(point.x, -limit, limit);
   const other = scene.objects?.find((o) => o.id !== simObject.id);
-  if (other?.body) {
-    const ox = other.body.position.x;
+  const otherX = other?.simState?.position?.x ?? null;
+  if (otherX != null) {
     if (simObject.id === 'object_1') {
-      x = Math.min(x, ox - minGap);
+      x = Math.min(x, otherX - minGap);
     } else {
-      x = Math.max(x, ox + minGap);
+      x = Math.max(x, otherX + minGap);
     }
   }
+
+  simObject.simState.position.x = x;
+  simObject.simState.velocity.x = 0;
 
   return new THREE.Vector3(x, trackY, 0);
 }

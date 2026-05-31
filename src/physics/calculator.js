@@ -85,27 +85,24 @@ export function momentum1D(masses, velocities) {
   return masses.reduce((p, m, i) => p + m * velocities[i], 0);
 }
 
-/** Vận tốc sau va chạm 1D (momentum + hệ số phục hồi e). */
+/**
+ * Vận tốc sau va chạm 1D (hệ số phục hồi e).
+ * v1' = ((m1 − e·m2)·v1 + (1+e)·m2·v2) / (m1+m2)
+ * v2' = ((m2 − e·m1)·v2 + (1+e)·m1·v1) / (m1+m2)
+ * e = 0 → v1' = v2' = (m1·v1 + m2·v2) / (m1+m2)
+ */
 export function solve1DCollision(m1, m2, v1, v2, e = 1) {
   const sum = m1 + m2;
   if (sum <= 0) return { v1After: v1, v2After: v2 };
-  const v1After = (m1 * v1 + m2 * v2 - e * m2 * (v2 - v1)) / sum;
-  const v2After = (m1 * v1 + m2 * v2 + e * m1 * (v2 - v1)) / sum;
+  const v1After = ((m1 - e * m2) * v1 + (1 + e) * m2 * v2) / sum;
+  const v2After = ((m2 - e * m1) * v2 + (1 + e) * m1 * v1) / sum;
   return { v1After, v2After };
 }
 
 export function totalKineticEnergy(objects) {
   return objects.reduce((sum, o) => {
-    const v = o.body?.velocity ?? o.velocity;
-    const m = o.mass ?? o.body?.mass;
+    const v = o.simState?.velocity ?? o.velocity;
+    const m = o.mass ?? o.simState?.mass;
     return sum + kineticEnergy(m, v.x, v.y, v.z);
   }, 0);
-}
-
-export function velocityFromBody(body) {
-  return { x: body.velocity.x, y: body.velocity.y, z: body.velocity.z };
-}
-
-export function positionFromBody(body) {
-  return { x: body.position.x, y: body.position.y, z: body.position.z };
 }

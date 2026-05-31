@@ -88,7 +88,7 @@ const SCENE_FORMULAS = {
         title: 'Bảo toàn động lượng',
         rows: [
           { sym: 'p',    eq: '= m₁v₁ + m₂v₂ = const' },
-          { sym: 'e',    eq: '= (v₂′ − v₁′) / (v₁ − v₂)' },
+          { sym: 'e',    eq: '= 0 (không đàn hồi) hoặc 1 (đàn hồi)' },
         ],
       },
       {
@@ -258,7 +258,12 @@ export class UIManager {
         });
         this.controllers.push({ ctrl: c, ...item });
         if (item.inactive) c.disable();
-      } else if (item.prop === 'pauseOnCollision' || item.prop === 'gravityEnabled' || item.prop === 'airResistance') {
+      } else if (
+        item.prop === 'pauseOnCollision'
+        || item.prop === 'gravityEnabled'
+        || item.prop === 'airResistance'
+        || item.prop === 'elasticCollision'
+      ) {
         const c = this.sceneFolder.add(params, item.prop).name(item.key);
         c.onChange(() => this.onParamChange(item.prop));
         this.controllers.push({ ctrl: c, ...item });
@@ -392,6 +397,23 @@ export class UIManager {
         }
       }
       if (sp.totalMomentum != null) scene += dataRow('p', `${formatNum(sp.totalMomentum)} kg·m/s`);
+      if (sp.momentum1 != null) scene += dataRow('p₁', `${formatNum(sp.momentum1)} kg·m/s`);
+      if (sp.momentum2 != null) scene += dataRow('p₂', `${formatNum(sp.momentum2)} kg·m/s`);
+      if (sp.kineticEnergy1 != null) scene += dataRow('Ek₁', `${formatNum(sp.kineticEnergy1)} J`);
+      if (sp.kineticEnergy2 != null) scene += dataRow('Ek₂', `${formatNum(sp.kineticEnergy2)} J`);
+      if (sp.mass1 != null) scene += dataRow('m₁', `${formatNum(sp.mass1)} kg`);
+      if (sp.mass2 != null) scene += dataRow('m₂', `${formatNum(sp.mass2)} kg`);
+      if (sp.object1Position != null) scene += dataRow('x₁', `${formatNum(sp.object1Position)} m`);
+      if (sp.object2Position != null) scene += dataRow('x₂', `${formatNum(sp.object2Position)} m`);
+      if (sp.elasticCollision != null) {
+        scene += dataRow('Va chạm', sp.elasticCollision ? 'Đàn hồi (e=1)' : 'Không đàn hồi (e=0)');
+      }
+      if (sp.friction != null) scene += dataRow('μ', formatNum(sp.friction));
+      if (sp.collisionOccurred != null) {
+        scene += dataRow('Va chạm', sp.collisionOccurred ? 'Có' : 'Không', {
+          status: sp.collisionOccurred ? 'warn' : undefined,
+        });
+      }
       if (sp.object1Velocity) {
         const v1 = sp.object1Velocity;
         scene += dataRow('v₁', `(${formatNum(v1.x)}, ${formatNum(v1.y)}, ${formatNum(v1.z)}) m/s`);
@@ -403,9 +425,20 @@ export class UIManager {
       if (sp.status) scene += dataRow('Trạng thái', sp.status);
       if (sp.collision) {
         const c = sp.collision;
-        scene += dataRow('p (sau va)', `${formatNum(c.after?.momentum)} kg·m/s`);
+        if (c.before) {
+          scene += dataRow('v₁ (trước)', `${formatNum(c.before.v1?.x)} m/s`);
+          scene += dataRow('v₂ (trước)', `${formatNum(c.before.v2?.x)} m/s`);
+          scene += dataRow('p (trước)', `${formatNum(c.before.momentum)} kg·m/s`);
+          scene += dataRow('Ek (trước)', `${formatNum(c.before.kineticEnergy)} J`);
+        }
+        if (c.after) {
+          scene += dataRow("v₁' (sau)", `${formatNum(c.after.v1?.x)} m/s`);
+          scene += dataRow("v₂' (sau)", `${formatNum(c.after.v2?.x)} m/s`);
+          scene += dataRow('p (sau va)', `${formatNum(c.after.momentum)} kg·m/s`);
+          scene += dataRow('Ek (sau)', `${formatNum(c.after.kineticEnergy)} J`);
+        }
         scene += dataRow('ΔEk', `${formatNum(c.energyLoss)} J`);
-        scene += dataRow('e', formatNum(c.restitutionObserved));
+        scene += dataRow('Δp', `${formatNum(c.momentumDelta)} kg·m/s`);
         if (c.analytic?.v1) {
           scene += dataRow("v₁' (LT)", `${formatNum(c.analytic.v1.x)} m/s`);
           scene += dataRow("v₂' (LT)", `${formatNum(c.analytic.v2.x)} m/s`);

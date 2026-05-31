@@ -1,28 +1,18 @@
 import { BaseScene } from './baseScene.js';
 import { SCENE_IDS, ARENA_HALF } from '../constants.js';
-import {
-  createStaticBox,
-  saveInitialPose,
-  resetSimObject,
-  syncMeshFromBody,
-  disposeSimObject,
-} from '../components/geometries.js';
+import { disposeSimObject } from '../components/geometries.js';
 import { createTexturedPlane, disposeGridMesh } from '../visualization/gridHelper.js';
-import {
-  kineticEnergy,
-  positionFromBody,
-  solve1DCollision,
-  velocityFromBody,
-} from '../physics/calculator.js';
-import {
-  applyHorizontalFriction,
-  clearForces,
-  applyAirDrag,
-  computeAirDragMagnitude,
-} from '../physics/forceManager.js';
+import { kineticEnergy } from '../physics/calculator.js';
 import { getState, setCollisionSnapshot, setPlayback } from '../state.js';
-import { getSignedVelocity } from './collisionPresets.js';
-import { createExperimentPair, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+import { collisionRestitution, getSignedVelocity } from './collisionPresets.js';
+import { createVisualMesh, applyVisualRotation } from '../graphics/experimentObjectFactory.js';
+import { createSimState } from '../physics/simObject.js';
+import { integrateCollision, handleCollision } from '../physics/integrators/collision1d.js';
+import { syncMeshFromState, saveInitialPoseKinematic, resetSimObjectKinematic } from '../components/simSync.js';
+import {
+  computeAirDragMagnitude,
+  collisionObjectDragGeometry,
+} from '../physics/airDrag.js';
 
 const REST_VELOCITY_EPS = 0.05;
 
@@ -37,12 +27,11 @@ export class Scene4Collision extends BaseScene {
     this.ground = null;
     this._collided = false;
     this._allStopped = false;
-    this._beforeSnapshot = null;
   }
 
   init(deps) {
     super.init(deps);
-    const { view, physics } = deps;
+    const { view } = deps;
     const scene = view.getScene();
     const params = getState().sceneParams;
 
@@ -52,22 +41,12 @@ export class Scene4Collision extends BaseScene {
     this.ground = floor;
     this.meshes.push(floor.mesh);
 
-    const groundBody = createStaticBox(
-      { x: ARENA_HALF * 2, y: 0.2, z: ARENA_HALF * 2 },
-      { x: 0, y: -0.1, z: 0 },
-    );
-    this.staticBodies.push(groundBody);
-    physics.addBody(groundBody);
-
     this._buildObjects(params);
     this.objects.forEach((o) => {
       scene.add(o.mesh);
-      physics.addBody(o.body);
-      saveInitialPose(o);
+      saveInitialPoseKinematic(o);
     });
-    this._applyPhysicsMaterials(params);
     this.applyPlayInitialState();
-    this._setupCollisionListener(physics);
   }
 
   _effectiveGravity() {
@@ -76,15 +55,9 @@ export class Scene4Collision extends BaseScene {
     return params.gravityEnabled ? g : 0;
   }
 
+  /** g cho ma sát ngang — luôn dùng trọng lực toàn cục (N = m·g trên mặt phẳng ngang). */
   _frictionGravity() {
-    return this._effectiveGravity();
-  }
-
-  _applyPhysicsMaterials(params) {
-    const { physics } = this._deps;
-    physics.setGravity(this._effectiveGravity());
-    physics.setDefaultRestitution(params.restitution);
-    physics.setDefaultFriction(0);
+    return getState().global.gravity ?? 9.8;
   }
 
   _spawnLayout(params) {
@@ -102,20 +75,11 @@ export class Scene4Collision extends BaseScene {
     };
   }
 
-  _configureBody1D(body) {
-    body.fixedRotation = true;
-    body.angularFactor.set(0, 0, 0);
-    body.linearFactor.set(1, 0, 0);
-    body.allowSleep = false;
-  }
-
   _lockToTrack(sim) {
-    const y = sim.trackY ?? 0.5;
-    sim.body.position.y = y;
-    sim.body.position.z = 0;
-    sim.body.velocity.y = 0;
-    sim.body.velocity.z = 0;
-    sim.body.angularVelocity.set(0, 0, 0);
+    sim.simState.position.y = sim.trackY ?? 0.5;
+    sim.simState.position.z = 0;
+    sim.simState.velocity.y = 0;
+    sim.simState.velocity.z = 0;
   }
 
   getInitialVelocities(params = getState().sceneParams) {
@@ -130,10 +94,9 @@ export class Scene4Collision extends BaseScene {
     const [o1, o2] = this.objects;
     if (!o1 || !o2) return;
     const { v1x, v2x } = this.getInitialVelocities(params);
-    o1.body.velocity.set(v1x, 0, 0);
-    o2.body.velocity.set(v2x, 0, 0);
-    o1.body.wakeUp();
-    o2.body.wakeUp();
+
+    o1.simState.velocity.x = v1x;
+    o2.simState.velocity.x = v2x;
     this._collided = false;
     this._allStopped = false;
   }
@@ -141,65 +104,56 @@ export class Scene4Collision extends BaseScene {
   _buildObjects(params) {
     this.objects.forEach((o) => {
       this._deps?.view?.getScene()?.remove(o.mesh);
-      this._deps?.physics?.removeBody(o.body);
       disposeSimObject(o);
     });
 
-    const { pos1, pos2, radius, trackY } = this._spawnLayout(params);
+    const { pos1, pos2, trackY } = this._spawnLayout(params);
+    const size1 = Math.max(0.4, (params.sphereRadius ?? 0.45) * 2 * (params.graphicsObject1Scale ?? 1));
+    const size2 = Math.max(0.4, (params.sphereRadius ?? 0.45) * 2 * (params.graphicsObject2Scale ?? 1));
 
-    const size1 = Math.max(0.4, radius * 2 * (params.graphicsObject1Scale ?? 1));
-    const size2 = Math.max(0.4, radius * 2 * (params.graphicsObject2Scale ?? 1));
-
-    const sphere1 = createExperimentPair({
+    const vis1 = createVisualMesh({
       shape: params.graphicsObject1Shape ?? 'sphere',
       size: size1,
-      mass: params.mass1,
-      position: pos1,
       color: parseColor(params.graphicsObject1Color, 0x4a90d9),
       wireframe: params.graphicsObject1Wireframe,
       textureMap: this._deps.textureMap,
       textureName: params.graphicsObject1Material ?? 'default',
-      damping: false,
     });
-    const sphere2 = createExperimentPair({
+    vis1.mesh.position.set(pos1.x, pos1.y, pos1.z);
+    const vis2 = createVisualMesh({
       shape: params.graphicsObject2Shape ?? 'sphere',
       size: size2,
-      mass: params.mass2,
-      position: pos2,
       color: parseColor(params.graphicsObject2Color, 0xe94560),
       wireframe: params.graphicsObject2Wireframe,
       textureMap: this._deps.textureMap,
       textureName: params.graphicsObject2Material ?? 'default',
-      damping: false,
     });
+    vis2.mesh.position.set(pos2.x, pos2.y, pos2.z);
 
-    this._configureBody1D(sphere1.body);
-    this._configureBody1D(sphere2.body);
+    const state1 = createSimState({ position: { ...pos1 }, velocity: { x: 0, y: 0, z: 0 }, mass: params.mass1 });
+    const state2 = createSimState({ position: { ...pos2 }, velocity: { x: 0, y: 0, z: 0 }, mass: params.mass2 });
 
     const o1 = {
       id: 'object_1',
-      ...sphere1,
+      mesh: vis1.mesh,
+      material: vis1.material,
+      simState: state1,
       mass: params.mass1,
       trackY,
       selectable: true,
-      reset: () => {
-        resetSimObject(o1);
-        this.applyPlayInitialState();
-      },
+      reset: () => { resetSimObjectKinematic(o1); this.applyPlayInitialState(); },
     };
     const o2 = {
       id: 'object_2',
-      ...sphere2,
+      mesh: vis2.mesh,
+      material: vis2.material,
+      simState: state2,
       mass: params.mass2,
       trackY,
       selectable: true,
-      reset: () => {
-        resetSimObject(o2);
-        this.applyPlayInitialState();
-      },
+      reset: () => { resetSimObjectKinematic(o2); this.applyPlayInitialState(); },
     };
 
-    this.objects = [o1, o2];
     applyVisualRotation(o1, {
       graphicsRotX: params.graphicsObject1RotX,
       graphicsRotY: params.graphicsObject1RotY,
@@ -210,93 +164,62 @@ export class Scene4Collision extends BaseScene {
       graphicsRotY: params.graphicsObject2RotY,
       graphicsRotZ: params.graphicsObject2RotZ,
     });
+
+    this.objects = [o1, o2];
     const floorMesh = this.ground?.mesh;
     this.meshes = floorMesh ? [floorMesh, o1.mesh, o2.mesh] : [o1.mesh, o2.mesh];
     this._collided = false;
     this._allStopped = false;
-    this._beforeSnapshot = null;
   }
 
-  applyRuntimeForces() {
-    if (this._stopped || this._allStopped || !this.objects.length) return;
+  _captureCollisionKinematic(v1Before, v2Before, v1After, v2After) {
     const params = getState().sceneParams;
-    const mu = params.friction ?? 0;
-    const g = this._frictionGravity();
-    const r = params.sphereRadius ?? 0.45;
-
-    this.objects.forEach((o, i) => {
-      clearForces(o.body);
-      if (mu > 0) {
-        applyHorizontalFriction(o.body, o.mass, g, mu, { x: 0, y: 0, z: 0 });
-      }
-      if (params.airResistance) {
-        const shape = i === 0
-          ? (params.graphicsObject1Shape ?? 'sphere')
-          : (params.graphicsObject2Shape ?? 'sphere');
-        const scale = i === 0
-          ? (params.graphicsObject1Scale ?? 1)
-          : (params.graphicsObject2Scale ?? 1);
-        const size = Math.max(0.4, Math.min(1.6, r * 2 * scale));
-        applyAirDrag(o.body, shape, size);
-      }
-    });
-  }
-
-  _setupCollisionListener(physics) {
-    this._contactHandler = (e) => {
-      if (this._collided) return;
-      const pairs = [this.objects[0]?.body, this.objects[1]?.body];
-      const involved = e.bodyA === pairs[0] || e.bodyB === pairs[0];
-      const involved2 = e.bodyA === pairs[1] || e.bodyB === pairs[1];
-      if (involved && involved2) {
-        this._captureCollision();
-      }
-    };
-    physics.world.addEventListener('collide', this._contactHandler);
-  }
-
-  _captureCollision() {
-    if (this._collided) return;
-    this._collided = true;
-    const params = getState().sceneParams;
-    const v1 = velocityFromBody(this.objects[0].body);
-    const v2 = velocityFromBody(this.objects[1].body);
     const m1 = params.mass1;
     const m2 = params.mass2;
-    const pBefore = m1 * v1.x + m2 * v2.x;
-    const ekBefore =
-      kineticEnergy(m1, v1.x, 0, 0) + kineticEnergy(m2, v2.x, 0, 0);
+    const p1Before = m1 * v1Before;
+    const p2Before = m2 * v2Before;
+    const p1After = m1 * v1After;
+    const p2After = m2 * v2After;
+    const pBefore = p1Before + p2Before;
+    const pAfter = p1After + p2After;
+    const ek1Before = kineticEnergy(m1, v1Before, 0, 0);
+    const ek2Before = kineticEnergy(m2, v2Before, 0, 0);
+    const ek1After = kineticEnergy(m1, v1After, 0, 0);
+    const ek2After = kineticEnergy(m2, v2After, 0, 0);
+    const ekBefore = ek1Before + ek2Before;
+    const ekAfter = ek1After + ek2After;
 
-    this._beforeSnapshot = { v1: { ...v1 }, v2: { ...v2 }, momentum: pBefore, kineticEnergy: ekBefore };
+    setCollisionSnapshot({
+      before: {
+        v1: { x: v1Before, y: 0, z: 0 },
+        v2: { x: v2Before, y: 0, z: 0 },
+        p1: p1Before,
+        p2: p2Before,
+        momentum: pBefore,
+        kineticEnergy: ekBefore,
+        ek1: ek1Before,
+        ek2: ek2Before,
+      },
+      after: {
+        v1: { x: v1After, y: 0, z: 0 },
+        v2: { x: v2After, y: 0, z: 0 },
+        p1: p1After,
+        p2: p2After,
+        momentum: pAfter,
+        kineticEnergy: ekAfter,
+        ek1: ek1After,
+        ek2: ek2After,
+      },
+      analytic: {
+        v1: { x: v1After, y: 0, z: 0 },
+        v2: { x: v2After, y: 0, z: 0 },
+      },
+      momentumDelta: pAfter - pBefore,
+      energyLoss: ekAfter - ekBefore,
+      restitutionObserved: collisionRestitution(params),
+    });
 
-    setTimeout(() => {
-      const v1a = velocityFromBody(this.objects[0].body);
-      const v2a = velocityFromBody(this.objects[1].body);
-      const pAfter = m1 * v1a.x + m2 * v2a.x;
-      const ekAfter =
-        kineticEnergy(m1, v1a.x, 0, 0) + kineticEnergy(m2, v2a.x, 0, 0);
-      const approach = v1.x - v2.x;
-      const e =
-        Math.abs(approach) > 0.01 ? (v2a.x - v1a.x) / approach : params.restitution;
-
-      const analytic = solve1DCollision(m1, m2, v1.x, v2.x, params.restitution);
-
-      setCollisionSnapshot({
-        before: this._beforeSnapshot,
-        after: { v1: v1a, v2: v2a, momentum: pAfter, kineticEnergy: ekAfter },
-        analytic: {
-          v1: { x: analytic.v1After, y: 0, z: 0 },
-          v2: { x: analytic.v2After, y: 0, z: 0 },
-        },
-        momentumDelta: pAfter - pBefore,
-        energyLoss: ekAfter - ekBefore,
-        restitutionObserved: e,
-      });
-
-      if (params.pauseOnCollision) {
-        setPlayback('pause');
-      }
-    }, 400);
+    if (params.pauseOnCollision) setPlayback('pause');
   }
 
   onParameterChange() {
@@ -304,17 +227,16 @@ export class Scene4Collision extends BaseScene {
 
     this.objects.forEach((o) => {
       this._deps.view.getScene().remove(o.mesh);
-      this._deps.physics.removeBody(o.body);
       disposeSimObject(o);
     });
+
     this._buildObjects(params);
     const scene = this._deps.view.getScene();
     this.objects.forEach((o) => {
       scene.add(o.mesh);
-      this._deps.physics.addBody(o.body);
-      saveInitialPose(o);
+      saveInitialPoseKinematic(o);
     });
-    this._applyPhysicsMaterials(params);
+
     this.applyPlayInitialState();
     this._collided = false;
     this._allStopped = false;
@@ -330,33 +252,82 @@ export class Scene4Collision extends BaseScene {
     this.applyPlayInitialState();
   }
 
+  integrate(dt) {
+    if (this._stopped || this._allStopped) return;
+    const [o1, o2] = this.objects;
+    if (!o1 || !o2) return;
+
+    const params = getState().sceneParams;
+    const g = this._frictionGravity();
+    const mu = params.friction ?? 0;
+    const r = params.sphereRadius ?? 0.45;
+
+    let dragOpts = null;
+    if (params.airResistance) {
+      const g1 = collisionObjectDragGeometry(params, 'object_1');
+      const g2 = collisionObjectDragGeometry(params, 'object_2');
+      dragOpts = {
+        enabled: true,
+        shape1: g1.shape,
+        size1: g1.size,
+        shape2: g2.shape,
+        size2: g2.size,
+      };
+    }
+
+    const afterFriction = integrateCollision(
+      {
+        x1: o1.simState.position.x,
+        v1: o1.simState.velocity.x,
+        x2: o2.simState.position.x,
+        v2: o2.simState.velocity.x,
+      },
+      o1.mass,
+      o2.mass,
+      g,
+      mu,
+      dt,
+      dragOpts,
+    );
+
+    let finalState = afterFriction;
+    if (!this._collided) {
+      const result = handleCollision(afterFriction, o1.mass, o2.mass, collisionRestitution(params), r);
+      if (result.collided) {
+        this._collided = true;
+        this._captureCollisionKinematic(result.v1Before, result.v2Before, result.state.v1, result.state.v2);
+      }
+      finalState = result.state;
+    }
+
+    o1.simState.position.x = finalState.x1;
+    o1.simState.velocity.x = finalState.v1;
+    o2.simState.position.x = finalState.x2;
+    o2.simState.velocity.x = finalState.v2;
+  }
+
   _tryStopAtRest() {
     const params = getState().sceneParams;
     if ((params.friction ?? 0) <= 0) return;
 
-    const allSlow = this.objects.every(
-      (o) => Math.abs(o.body.velocity.x) < REST_VELOCITY_EPS,
-    );
+    const allSlow = this.objects.every((o) => Math.abs(o.simState.velocity.x) < REST_VELOCITY_EPS);
     if (!allSlow) return;
 
     this.objects.forEach((o) => {
-      o.body.velocity.set(0, 0, 0);
-      o.body.angularVelocity.set(0, 0, 0);
+      o.simState.velocity.x = 0;
     });
     this._allStopped = true;
   }
 
   update() {
-    const params = getState().sceneParams;
-
     this.objects.forEach((o) => {
       this._lockToTrack(o);
-      syncMeshFromBody(o.mesh, o.body);
+      syncMeshFromState(o);
     });
 
     const limit = ARENA_HALF - 1;
     for (const o of this.objects) {
-      if (Math.abs(o.body.position.x) > limit) {
+      if (Math.abs(o.simState.position.x) > limit) {
         this.stopSimulation();
         return;
       }
@@ -379,62 +350,102 @@ export class Scene4Collision extends BaseScene {
     const [o1, o2] = this.objects;
     if (!o1 || !o2) return { time: s.simulationTime, sceneName: this.name };
 
-    const v1 = velocityFromBody(o1.body);
-    const v2 = velocityFromBody(o2.body);
     const m1 = params.mass1;
     const m2 = params.mass2;
-    const pTotal = m1 * v1.x + m2 * v2.x;
-    const ek =
-      kineticEnergy(m1, v1.x, 0, 0) + kineticEnergy(m2, v2.x, 0, 0);
-    const mu = params.friction ?? 0;
     const g = this._frictionGravity();
-    const frictionMag = mu * m1 * g;
-    const activeFriction = Math.abs(v1.x) > 0.01 ? frictionMag : 0;
-    const r = params.sphereRadius ?? 0.45;
-    const size1 = Math.max(0.4, Math.min(1.6, r * 2 * (params.graphicsObject1Scale ?? 1)));
-    const dragMag1 = params.airResistance
-      ? computeAirDragMagnitude(o1.body, params.graphicsObject1Shape ?? 'sphere', size1)
-      : 0;
+    const mu = params.friction ?? 0;
+
+    const x1 = o1.simState.position.x;
+    const x2 = o2.simState.position.x;
+    const v1 = { x: o1.simState.velocity.x, y: 0, z: 0 };
+    const v2 = { x: o2.simState.velocity.x, y: 0, z: 0 };
+    const pos1 = { ...o1.simState.position };
+
+    const p1 = m1 * v1.x;
+    const p2 = m2 * v2.x;
+    const pTotal = p1 + p2;
+    const ek1 = kineticEnergy(m1, v1.x, 0, 0);
+    const ek2 = kineticEnergy(m2, v2.x, 0, 0);
+    const ek = ek1 + ek2;
+
+    const friction1 = Math.abs(v1.x) > REST_VELOCITY_EPS ? mu * m1 * g : 0;
+    const friction2 = Math.abs(v2.x) > REST_VELOCITY_EPS ? mu * m2 * g : 0;
+    const weight1 = params.gravityEnabled ? m1 * g : 0;
+    const weight2 = params.gravityEnabled ? m2 * g : 0;
+
+    const geo1 = collisionObjectDragGeometry(params, 'object_1');
+    const geo2 = collisionObjectDragGeometry(params, 'object_2');
+    const drag1 = params.airResistance ? computeAirDragMagnitude(Math.abs(v1.x), geo1.shape, geo1.size) : 0;
+    const drag2 = params.airResistance ? computeAirDragMagnitude(Math.abs(v2.x), geo2.shape, geo2.size) : 0;
+
+    const frictionVec1 = friction1 > 0
+      ? { x: -Math.sign(v1.x) * friction1, y: 0, z: 0 }
+      : { x: 0, y: 0, z: 0 };
+    const frictionVec2 = friction2 > 0
+      ? { x: -Math.sign(v2.x) * friction2, y: 0, z: 0 }
+      : { x: 0, y: 0, z: 0 };
+    const gravityVec = params.gravityEnabled ? { x: 0, y: -(m1 + m2) * g, z: 0 } : { x: 0, y: 0, z: 0 };
+    const normalVec = params.gravityEnabled ? { x: 0, y: (m1 + m2) * g, z: 0 } : { x: 0, y: 0, z: 0 };
+    const netFriction = friction1 + friction2;
 
     return {
       time: s.simulationTime,
       sceneName: this.name,
       mass: m1 + m2,
-      position: positionFromBody(o1.body),
+      position: pos1,
       velocity: v1,
       speed: Math.abs(v1.x),
       kineticEnergy: ek,
       forces: {
         applied: 0,
-        gravity: params.gravityEnabled ? m1 * g : 0,
-        normal: params.gravityEnabled ? m1 * g : 0,
-        friction: activeFriction,
-        drag: dragMag1,
-        net: activeFriction + dragMag1,
+        gravity: weight1 + weight2,
+        normal: weight1 + weight2,
+        friction: netFriction,
+        drag: drag1 + drag2,
+        net: netFriction + drag1 + drag2,
       },
       forceVectors: {
         applied: null,
-        gravity: null,
-        normal: null,
-        friction: null,
-        net: null,
+        gravity: params.gravityEnabled ? gravityVec : null,
+        normal: params.gravityEnabled ? normalVec : null,
+        friction: netFriction > 0 ? { x: frictionVec1.x + frictionVec2.x, y: 0, z: 0 } : null,
+        net: netFriction > 0 ? { x: frictionVec1.x + frictionVec2.x, y: 0, z: 0 } : null,
       },
       sceneSpecific: {
         collisionMode: params.collisionMode,
+        object1Position: x1,
+        object2Position: x2,
+        mass1: m1,
+        mass2: m2,
         object1Velocity: v1,
         object2Velocity: v2,
+        momentum1: p1,
+        momentum2: p2,
         totalMomentum: pTotal,
+        kineticEnergy1: ek1,
+        kineticEnergy2: ek2,
+        elasticCollision: params.elasticCollision,
+        restitution: collisionRestitution(params),
+        friction: mu,
         initialDistance: params.initialDistance,
+        collisionOccurred: this._collided,
         collision: s.collisionSnapshot,
         status: this._simulationStatus(),
+        object1Forces: {
+          friction: friction1,
+          frictionVector: frictionVec1,
+          weight: weight1,
+        },
+        object2Forces: {
+          friction: friction2,
+          frictionVector: frictionVec2,
+          weight: weight2,
+        },
       },
     };
   }
 
   dispose() {
-    if (this._contactHandler && this._deps?.physics) {
-      this._deps.physics.world.removeEventListener('collide', this._contactHandler);
-    }
     if (this.ground) disposeGridMesh(this.ground);
     super.dispose();
   }
