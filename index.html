@@ -29,7 +29,7 @@
             </span>
             <div>
               <h1>Physics Sim</h1>
-              <p class="subtitle">Không gian mô phỏng 3D · UIT CS431</p>
+              <p class="subtitle">Không gian mô phỏng 3D · UIT CS105</p>
             </div>
           </div>
         </header>
@@ -74,50 +74,6 @@
             </summary>
             <div class="section-content no-pad">
               <div id="gui-root"></div>
-            </div>
-          </details>
-
-          <details class="sidebar-section" open id="section-data">
-            <summary class="section-toggle">
-              <span class="section-title">Dữ liệu vật lý</span>
-              <span class="panel-badge" id="data-scene-badge">—</span>
-            </summary>
-            <div class="section-content" id="data-panel">
-              <div id="data-content" class="data-scroll" role="log" aria-live="polite">
-                <p class="data-placeholder">Chọn scene và bấm Play để xem số liệu thời gian thực.</p>
-              </div>
-              <div class="data-actions" role="group" aria-label="Ghi dữ liệu">
-                <button type="button" id="btn-record" class="btn small">
-                  <span aria-hidden="true">＋</span> Ghi mốc
-                </button>
-                <button type="button" id="btn-clear-records" class="btn small">Xóa mốc</button>
-                <button type="button" id="btn-export-csv" class="btn small accent-outline">Export CSV</button>
-              </div>
-              <div id="records-table-wrap" class="records-wrap hidden">
-                <table id="records-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>t (s)</th>
-                      <th>Pos</th>
-                      <th>v (m/s)</th>
-                      <th>Ek (J)</th>
-                    </tr>
-                  </thead>
-                  <tbody></tbody>
-                </table>
-              </div>
-            </div>
-          </details>
-
-          <details class="sidebar-section" open id="section-formula">
-            <summary class="section-toggle">
-              <span class="section-title">Công thức</span>
-            </summary>
-            <div class="section-content">
-              <div id="formula-content" class="formula-content">
-                <p class="data-placeholder">Chọn scene để xem công thức.</p>
-              </div>
             </div>
           </details>
 
@@ -174,6 +130,57 @@
         </div>
         <canvas id="canvas"></canvas>
       </main>
+
+      <aside id="info-panel" aria-label="Phân tích vật lý">
+        <header class="info-panel-header">
+          <h2 class="info-panel-title">Phân tích</h2>
+          <span class="panel-badge" id="data-scene-badge">—</span>
+        </header>
+        <div class="info-panel-body">
+          <details class="sidebar-section" open id="section-data">
+            <summary class="section-toggle">
+              <span class="section-title">Dữ liệu vật lý</span>
+            </summary>
+            <div class="section-content" id="data-panel">
+              <div id="data-content" class="data-scroll" role="log" aria-live="polite">
+                <p class="data-placeholder">Chọn scene và bấm Play để xem số liệu thời gian thực.</p>
+              </div>
+              <div class="data-actions" role="group" aria-label="Ghi dữ liệu">
+                <button type="button" id="btn-record" class="btn small">
+                  <span aria-hidden="true">＋</span> Ghi mốc
+                </button>
+                <button type="button" id="btn-clear-records" class="btn small">Xóa mốc</button>
+                <button type="button" id="btn-export-csv" class="btn small accent-outline">Export CSV</button>
+              </div>
+              <div id="records-table-wrap" class="records-wrap hidden">
+                <table id="records-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>t (s)</th>
+                      <th>Pos</th>
+                      <th>v (m/s)</th>
+                      <th>Ek (J)</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+
+          <details class="sidebar-section" open id="section-formula">
+            <summary class="section-toggle">
+              <span class="section-title">Công thức</span>
+            </summary>
+            <div class="section-content">
+              <div id="formula-content" class="formula-content">
+                <p class="data-placeholder">Chọn scene để xem công thức.</p>
+              </div>
+            </div>
+          </details>
+        </div>
+      </aside>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getState } from '../state.js';
+import { SCENE_IDS } from '../constants.js';
 import { clamp } from '../utils/helpers.js';
 
 const COLORS = {
@@ -53,10 +54,10 @@ export class ForceVisualizer {
     return arrow;
   }
 
-  _setArrow(key, vector, color) {
+  _setArrow(key, vector, color, origin = LOCAL_ORIGIN, isNet = false) {
     const arrow = this._getOrCreateArrow(key, color);
     const magnitude = vector.length();
-    const hideThreshold = key === 'net' ? NET_HIDE_BELOW_N : HIDE_BELOW_N;
+    const hideThreshold = isNet ? NET_HIDE_BELOW_N : HIDE_BELOW_N;
     if (magnitude < hideThreshold) {
       arrow.visible = false;
       return;
@@ -65,7 +66,7 @@ export class ForceVisualizer {
     const dir = vector.clone().normalize();
     const rawLen = magnitude * this.lengthScale;
     const length = clamp(rawLen, this.minLength, this.maxLength);
-    arrow.position.set(0, 0, 0);
+    arrow.position.set(origin.x, origin.y, origin.z);
     arrow.setDirection(dir);
     arrow.setLength(length, length * 0.22, length * 0.12);
     arrow.visible = true;
@@ -93,7 +94,14 @@ export class ForceVisualizer {
     return new THREE.Vector3(x, y, z);
   }
 
-  updateFromTelemetry(telemetry, origin) {
+  _worldPositionFromMesh(mesh) {
+    if (!mesh) return null;
+    const p = new THREE.Vector3();
+    mesh.getWorldPosition(p);
+    return p;
+  }
+
+  updateFromTelemetry(telemetry, origin, activeScene = null) {
     const mode = getState().display.showVectors;
     if (mode === 'none' || !telemetry?.forceVectors) {
       this.group.position.set(0, 0, 0);
@@ -101,29 +109,64 @@ export class ForceVisualizer {
       return;
     }
 
-    this.group.position.set(origin.x ?? 0, origin.y ?? 0, origin.z ?? 0);
+    this.group.position.set(0, 0, 0);
 
-    const vectors = telemetry.forceVectors;
     const visible = new Set();
 
     const showAll = mode === 'all';
     const showSelected = mode === 'selected';
 
-    const maybeDraw = (key) => {
-      const vec = this._toVector(vectors[key]);
+    const maybeDraw = (key, payload, drawOrigin) => {
+      const vec = this._toVector(payload);
       if (!vec) return;
-      const allow = showAll || (showSelected && (key === 'applied' || key === 'net'));
+      const baseKey = key.includes(':') ? key.split(':')[1] : key;
+      const allow = showAll || (showSelected && (baseKey === 'applied' || baseKey === 'net'));
       if (!allow) return;
-      this._setArrow(key, vec, COLORS[key]);
+      this._setArrow(key, vec, COLORS[baseKey], drawOrigin, baseKey === 'net');
       visible.add(key);
     };
 
-    maybeDraw('applied');
-    maybeDraw('gravity');
-    maybeDraw('normal');
-    maybeDraw('friction');
-    maybeDraw('drag');
-    maybeDraw('net');
+    const isCollisionScene =
+      activeScene?.id === SCENE_IDS.COLLISION &&
+      telemetry?.sceneSpecific?.object1Forces?.forceVectors &&
+      telemetry?.sceneSpecific?.object2Forces?.forceVectors &&
+      activeScene.objects?.length >= 2;
+
+    if (isCollisionScene) {
+      const objectPayloads = [
+        {
+          id: 'obj1',
+          vectors: telemetry.sceneSpecific.object1Forces.forceVectors,
+          mesh: activeScene.objects[0]?.mesh,
+        },
+        {
+          id: 'obj2',
+          vectors: telemetry.sceneSpecific.object2Forces.forceVectors,
+          mesh: activeScene.objects[1]?.mesh,
+        },
+      ];
+
+      objectPayloads.forEach(({ id, vectors, mesh }) => {
+        const objOrigin = this._worldPositionFromMesh(mesh);
+        if (!objOrigin || !vectors) return;
+
+        maybeDraw(`${id}:applied`, vectors.applied, objOrigin);
+        maybeDraw(`${id}:gravity`, vectors.gravity, objOrigin);
+        maybeDraw(`${id}:normal`, vectors.normal, objOrigin);
+        maybeDraw(`${id}:friction`, vectors.friction, objOrigin);
+        maybeDraw(`${id}:drag`, vectors.drag, objOrigin);
+        maybeDraw(`${id}:net`, vectors.net, objOrigin);
+      });
+    } else {
+      const drawOrigin = new THREE.Vector3(origin.x ?? 0, origin.y ?? 0, origin.z ?? 0);
+      const vectors = telemetry.forceVectors;
+      maybeDraw('applied', vectors.applied, drawOrigin);
+      maybeDraw('gravity', vectors.gravity, drawOrigin);
+      maybeDraw('normal', vectors.normal, drawOrigin);
+      maybeDraw('friction', vectors.friction, drawOrigin);
+      maybeDraw('drag', vectors.drag, drawOrigin);
+      maybeDraw('net', vectors.net, drawOrigin);
+    }
     this._hideUnused(visible);
   }
 

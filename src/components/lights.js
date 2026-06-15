@@ -8,10 +8,10 @@ import { SHADOW_MAP_SIZE } from '../constants.js';
  *   - PointLight     (ánh sáng điểm, warm accent)
  */
 export function setupSceneLights(scene) {
-  // ── Ambient Light ──────────────────────────────────────────────────────────
+  // Ambient Light
   const ambient = new THREE.AmbientLight(0x9eb8ff, 0.42);
 
-  // ── Directional Light (with PCFSoft shadow map) ───────────────────────────
+  // Directional Light (with PCFSoft shadow map) 
   const directional = new THREE.DirectionalLight(0xe8f0ff, 0.78);
   directional.position.set(15, 25, 12);
   directional.castShadow = true;
@@ -26,9 +26,7 @@ export function setupSceneLights(scene) {
   directional.shadow.camera.bottom = -25;
   directional.shadow.bias = -0.0005;
 
-  // ── Point Light (ánh sáng điểm) ───────────────────────────────────────────
-  // Warm fill light positioned above the center of the scene.
-  // castShadow = false for performance; the directional light handles shadows.
+  // Point Light (ánh sáng điểm) 
   const pointLight = new THREE.PointLight(0x7c5cff, 0.48, 40, 1.4);
   pointLight.position.set(4, 10, 6);
 

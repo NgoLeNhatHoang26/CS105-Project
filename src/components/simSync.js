@@ -1,5 +1,3 @@
-/** Đồng bộ Three.js mesh từ SimState (kinematic). */
-
 import * as THREE from 'three';
 import { syncLoadedVisualFromMesh } from '../graphics/modelLoader.js';
 

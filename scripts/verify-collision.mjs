@@ -1,7 +1,3 @@
-/**
- * Verify collision physics formulas (Cases 1–8).
- * Run: node scripts/verify-collision.mjs
- */
 import { solve1DCollision, kineticEnergy } from '../src/physics/calculator.js';
 import {
   integrateCollision,

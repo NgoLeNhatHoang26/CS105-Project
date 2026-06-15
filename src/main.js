@@ -191,7 +191,7 @@ function loop(now) {
     getForceOriginFromScene(sceneManager.getActiveScene()) ??
     raw.position ??
     { x: 0, y: 1, z: 0 };
-  forceViz.updateFromTelemetry(raw, origin);
+  forceViz.updateFromTelemetry(raw, origin, sceneManager.getActiveScene());
   debugViz.update();
 
   controls.update();

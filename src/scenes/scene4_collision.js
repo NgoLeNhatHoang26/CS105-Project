@@ -16,6 +16,35 @@ import {
 
 const REST_VELOCITY_EPS = 0.05;
 
+/** Vector lực từng vật (hiển thị) — W/N luôn dùng m·g như scene 1–3. */
+function objectForceVectors(mass, vx, g, mu, dragMag, dragVec) {
+  const weight = mass * g;
+  const gravity = { x: 0, y: -weight, z: 0 };
+  const normal = { x: 0, y: weight, z: 0 };
+
+  const frictionMag = Math.abs(vx) > REST_VELOCITY_EPS ? mu * mass * g : 0;
+  const friction = frictionMag > 0
+    ? { x: -Math.sign(vx) * frictionMag, y: 0, z: 0 }
+    : null;
+
+  const drag = dragMag > 0 && dragVec ? dragVec : null;
+
+  const net = {
+    x: (friction?.x ?? 0) + (drag?.x ?? 0),
+    y: 0,
+    z: (friction?.z ?? 0) + (drag?.z ?? 0),
+  };
+
+  return {
+    applied: null,
+    gravity,
+    normal,
+    friction,
+    drag,
+    net,
+  };
+}
+
 function parseColor(hex, fallback) {
   if (typeof hex !== 'string') return fallback;
   return Number.parseInt(hex.replace('#', ''), 16) || fallback;
@@ -451,11 +480,13 @@ export class Scene4Collision extends BaseScene {
           friction: friction1,
           frictionVector: frictionVec1,
           weight: weight1,
+          forceVectors: objectForceVectors(m1, v1.x, g, mu, drag1, dragVec1),
         },
         object2Forces: {
           friction: friction2,
           frictionVector: frictionVec2,
           weight: weight2,
+          forceVectors: objectForceVectors(m2, v2.x, g, mu, drag2, dragVec2),
         },
       },
     };

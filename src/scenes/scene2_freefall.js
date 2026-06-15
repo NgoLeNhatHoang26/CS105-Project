@@ -180,16 +180,15 @@ export class Scene2FreeFall extends BaseScene {
     const dragVec = dragMag > 0 && speed > 1e-4
       ? airDragForceVector(vel, shape, size)
       : { x: 0, y: 0, z: 0 };
-    const heightBottom = bottomYFromCenterY(pos.y, r);
-    const nearGround = heightBottom <= GROUND_EPS + 0.05;
-    const normalForNet = nearGround ? params.mass * g : 0;
     const netVec = {
       x: appliedVec.x + gravityVec.x + dragVec.x,
-      y: appliedVec.y + gravityVec.y + normalForNet + dragVec.y,
+      y: appliedVec.y + gravityVec.y + dragVec.y,
       z: appliedVec.z + gravityVec.z + dragVec.z,
     };
     const forces = freeFallForces(params.mass, g, appliedVec, netVec);
     forces.drag = dragMag;
+    const heightBottom = bottomYFromCenterY(pos.y, r);
+    const nearGround = heightBottom <= GROUND_EPS + 0.05;
     const pureFreeFall = params.forceMag === 0 && !params.airResistance;
     const t = s.simulationTime;
     const theory = pureFreeFall ? theoreticalFreeFall(g, t, releaseH) : null;

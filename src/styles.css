@@ -5,6 +5,9 @@
   --sidebar-w: 300px;
   --sidebar-w-min: 268px;
   --sidebar-w-max: 340px;
+  --info-panel-w: 300px;
+  --info-panel-w-min: 268px;
+  --info-panel-w-max: 340px;
 
   --bg-app:           #03040a;
   --bg-sidebar:       rgba(8, 10, 22, 0.92);
@@ -92,8 +95,63 @@ html, body, #app {
   box-shadow: 4px 0 32px rgba(0, 0, 0, 0.45), inset -1px 0 0 rgba(110, 231, 255, 0.06);
   backdrop-filter: blur(12px);
   z-index: 10;
-  flex-shrink: 0;
+  flex-shrink: 1;
   overflow: hidden;
+}
+
+/* ════════════════════════════════════════
+   INFO PANEL (right)
+════════════════════════════════════════ */
+#info-panel {
+  width: var(--info-panel-w);
+  min-width: var(--info-panel-w-min);
+  max-width: var(--info-panel-w-max);
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(195deg, rgba(14, 16, 36, 0.97) 0%, rgba(6, 8, 20, 0.98) 100%);
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 32px rgba(0, 0, 0, 0.45), inset 1px 0 0 rgba(110, 231, 255, 0.06);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+  flex-shrink: 1;
+  overflow: hidden;
+}
+
+#info-panel[hidden] {
+  display: none;
+}
+
+.info-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.info-panel-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-bright);
+  text-shadow: 0 0 12px rgba(110, 231, 255, 0.3);
+}
+
+.info-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.info-panel-body::-webkit-scrollbar { width: 4px; }
+.info-panel-body::-webkit-scrollbar-track { background: transparent; }
+.info-panel-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }
 
 /* ── App Header ── */
@@ -514,7 +572,7 @@ body[data-sim-state='running'] .status-hint {
 }
 
 .data-scroll {
-  max-height: 210px;
+  max-height: 320px;
   overflow-y: auto;
   background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
@@ -603,7 +661,7 @@ body[data-sim-state='running'] .status-hint {
 
 .records-wrap {
   margin-top: var(--space-sm);
-  max-height: 120px;
+  max-height: 180px;
   overflow: auto;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -808,10 +866,10 @@ kbd {
    VIEWPORT & CANVAS — cosmic frame
 ════════════════════════════════════════ */
 #viewport {
-  flex: 1;
+  flex: 1 1 auto;
   position: relative;
   background: var(--bg-viewport);
-  min-width: 0;
+  min-width: 280px;
   overflow: hidden;
 }
 
@@ -950,10 +1008,58 @@ kbd {
 }
 
 /* ════════════════════════════════════════
-   RESPONSIVE
+   RESPONSIVE — PC window resize (giữ 3 cột)
 ════════════════════════════════════════ */
+@media (max-width: 1280px) {
+  :root {
+    --sidebar-w: 268px;
+    --sidebar-w-min: 240px;
+    --sidebar-w-max: 280px;
+    --info-panel-w: 268px;
+    --info-panel-w-min: 240px;
+    --info-panel-w-max: 280px;
+  }
+
+  .app-header,
+  .sidebar-transport,
+  .info-panel-header {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  .sidebar-section > summary {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  .section-content {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  #data-panel {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  .data-scroll {
+    max-height: min(280px, 32vh);
+  }
+
+  .records-wrap {
+    max-height: min(160px, 22vh);
+  }
+}
+
 @media (max-width: 1100px) {
-  :root { --sidebar-w: 278px; }
+  :root {
+    --sidebar-w: 248px;
+    --sidebar-w-min: 220px;
+    --sidebar-w-max: 260px;
+    --info-panel-w: 248px;
+    --info-panel-w-min: 220px;
+    --info-panel-w-max: 260px;
+  }
 
   .btn-label { display: none; }
 
@@ -962,25 +1068,128 @@ kbd {
   }
 
   .btn { padding: 9px 6px; }
+
+  .subtitle { display: none; }
+
+  .app-header h1 {
+    font-size: 0.88rem;
+  }
+
+  .status-hint {
+    font-size: 0.62rem;
+    line-height: 1.45;
+  }
+
+  .data-scroll {
+    max-height: min(240px, 30vh);
+    font-size: 0.67rem;
+  }
+
+  .formula-content {
+    font-size: 0.67rem;
+  }
+
+  .viewport-label {
+    font-size: 0.52rem;
+    letter-spacing: 0.18em;
+    padding: 3px 10px;
+  }
 }
 
-@media (max-width: 860px) {
-  #app { flex-direction: column; }
-
-  #sidebar {
-    width: 100%;
-    max-width: none;
-    max-height: 52vh;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
+@media (max-width: 960px) {
+  :root {
+    --sidebar-w: 228px;
+    --sidebar-w-min: 200px;
+    --sidebar-w-max: 240px;
+    --info-panel-w: 228px;
+    --info-panel-w-min: 200px;
+    --info-panel-w-max: 240px;
   }
 
   #viewport {
-    flex: 1;
-    min-height: 48vh;
+    min-width: 240px;
   }
+
+  .app-logo {
+    width: 32px;
+    height: 32px;
+  }
+
+  .logo-svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .app-header {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .sidebar-transport {
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+  }
+
+  .info-panel-header {
+    padding-top: var(--space-sm);
+    padding-bottom: var(--space-sm);
+  }
+
+  .info-panel-title {
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+  }
+
+  .section-title {
+    font-size: 0.68rem;
+  }
+
+  .panel-badge {
+    font-size: 0.58rem;
+    max-width: 100px;
+  }
+
+  .data-actions {
+    gap: 4px;
+  }
+
+  .btn.small {
+    font-size: 0.62rem;
+    padding: 4px 7px;
+  }
+
+  .data-scroll {
+    max-height: min(200px, 28vh);
+  }
+
+  .records-wrap {
+    max-height: min(120px, 18vh);
+  }
+
+  #records-table {
+    font-size: 0.6rem;
+  }
+
+  #gui-root .lil-gui {
+    --font-size: 10px;
+    --input-font-size: 10px;
+    --name-width: 48%;
+  }
+
+  .viewport-corners .corner {
+    width: 20px;
+    height: 20px;
+  }
+
+  .viewport-corners .tl { top: 10px; left: 10px; }
+  .viewport-corners .tr { top: 10px; right: 10px; }
+  .viewport-corners .bl { bottom: 10px; left: 10px; }
+  .viewport-corners .br { bottom: 10px; right: 10px; }
 }
 
 @media (min-width: 1400px) {
-  :root { --sidebar-w: 320px; }
+  :root {
+    --sidebar-w: 320px;
+    --info-panel-w: 320px;
+  }
 }

@@ -1,8 +1,5 @@
 import * as THREE from 'three';
 
-/**
- * MeshPhongMaterial — mô hình Phong (ambient + diffuse + specular).
- */
 export function createPhongMaterial(color, options = {}) {
   return new THREE.MeshPhongMaterial({
     color: color ?? 0x4a90d9,

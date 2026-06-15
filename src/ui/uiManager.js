@@ -228,8 +228,8 @@ export class UIManager {
 
   applyDataPanelVisibility() {
     const show = getState().display.showDataPanel;
-    const section = document.getElementById('section-data');
-    if (section) section.hidden = !show;
+    const panel = document.getElementById('info-panel');
+    if (panel) panel.hidden = !show;
   }
 
   bindScene(sceneId) {

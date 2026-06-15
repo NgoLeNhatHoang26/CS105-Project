@@ -2,9 +2,7 @@ import * as THREE from 'three';
 import { setupSceneLights } from '../components/lights.js';
 import { createSpaceStarfield, setSpaceBackground } from '../visualization/spaceEnvironment.js';
 
-/**
- * Renderer — Perspective projection, Phong lighting, PCF soft shadows.
- */
+
 export class ViewRenderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -71,10 +69,6 @@ export class ViewRenderer {
     if (this.scene.fog) this.scene.fog.color.copy(c);
   }
 
-  /**
-   * Toggle shadow map rendering.
-   * Forces material re-upload so objects appear correctly after toggling.
-   */
   setShadows(enabled) {
     this.renderer.shadowMap.enabled = enabled;
     this.scene.traverse((obj) => {

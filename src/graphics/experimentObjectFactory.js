@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-// Chỉ tạo mesh Three.js — vật lý qua simState + integrators.
+
 import { createPhongMaterial } from '../components/materials.js';
 
 function clampScale(scale) {
