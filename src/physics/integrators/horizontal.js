@@ -1,13 +1,3 @@
-/**
- * horizontal.js — tích phân kinematic cảnh 3 (Lực ngang).
- *
- * Chuyển động trên mặt phẳng xz; y cố định.
- * Công thức THCS:
- *   N = mg,  f = μN = μmg
- *   a_x = (F_x − f_x) / m   (tương tự a_z)
- *   Khi vật gần đứng yên và F < f → a = 0, v = 0
- */
-
 import { stepEuler1D } from './euler1d.js';
 import { airDragAcceleration3D, objectDragGeometry } from '../airDrag.js';
 
